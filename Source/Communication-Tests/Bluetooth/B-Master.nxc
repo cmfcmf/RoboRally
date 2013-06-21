@@ -1,0 +1,4 @@
+task main()
+{
+	SendRemoteNumber(1, MAILBOX1, 4);
+}

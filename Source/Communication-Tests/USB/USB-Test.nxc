@@ -1,0 +1,47 @@
+//Inboxes
+#define INBOX 1
+#define OUTBOX 0
+#define ONELINE 16
+
+task main()
+{
+ string request;
+ string nrequest;
+ int i;
+ int currindex;
+ while(true)
+ {
+  ReceiveMessage(INBOX, true, request); //Read message into "request" variable.
+  if(StrLen(request)>0)
+  {
+    PlayTone(500, 500);
+   ClearScreen();
+   i = 0;
+   for(currindex = 0; StrLen(request) > currindex; currindex += ONELINE)
+   {
+	while(SubStr(request, currindex, 1) == " ")
+	{
+ 	StrReplace(request, currindex, "");
+ 	currindex ++;
+	}
+	nrequest = SubStr(request, currindex, ONELINE);
+	TextOut(0, 56-i*8, nrequest);
+	i++;
+   }
+   Wait(5);
+  }
+  if(ButtonPressed(BTNCENTER, true)) {
+    SendMessage(OUTBOX, "This is a test!");
+    Wait(1000);
+  }
+  if(ButtonPressed(BTNRIGHT, true)) {
+    SendMessage(OUTBOX, "roboter_0");
+    Wait(1000);
+  }
+  if(ButtonPressed(BTNLEFT, true)) {
+    SendMessage(OUTBOX, "ok");
+    Wait(1000);
+  }
+ }
+}
+

@@ -1,0 +1,9 @@
+task main()
+{
+	int in = 0;
+	while(in == 0)
+		ReceiveRemoteNumber(MAILBOX1, true, in);
+
+	NumOut(0,0, in, true);
+	Wait(2000);
+}
