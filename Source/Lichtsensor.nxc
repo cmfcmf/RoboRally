@@ -1,0 +1,12 @@
+//Sensor 1 (rechts): weiß: 780, schwarz: 490
+//Sensor 2 (links) : weiß: 680, schwarz: 420
+
+task main() {
+    SetSensorType(IN_1, SENSOR_TYPE_LIGHT_ACTIVE);
+    SetSensorType(IN_2, SENSOR_TYPE_LIGHT_ACTIVE);
+    
+    while(1) {
+        NumOut(0, LCD_LINE1, Sensor(IN_1));
+        NumOut(0, LCD_LINE2, Sensor(IN_2));
+    }
+}

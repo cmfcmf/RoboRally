@@ -1,0 +1,784 @@
+/**
+ * @file Master.nxc
+ */
+
+/**
+ * @brief Wenn 1, sendet der Master die Befehle nicht per Bluetooth und simuliert nur auf dem Display.
+ * @see BluetoothBefehlSenden()
+ * @see BluetoothVerbindungPruefen()
+ * @todo in {@link Global.h} verlegen?
+ */
+//#define KEINE_ECHTEN_ROBOTER 1
+
+#include "Global.h"
+#include "Spielfeld.h"
+#include "Roboter.h"
+#include "Bluetooth.h"
+#include "Master.h"
+
+#include "Sonstiges.nxc"
+#include "Spielfeld.nxc"
+#include "Roboter.nxc"
+#include "Bluetooth.nxc"
+#include "USB.nxc";
+
+
+/**
+ * @brief Liest die Befehlskarten eines Roboters ein.
+ */
+void KartenEinlesen(byte roboter_nummer, int &karten[])
+{  
+    USBSend("roboter_" + NumToStr(roboter_nummer));
+    TextOut(0, LCD_LINE1, "Warte auf Karten!", true); 
+    TextOut(0, LCD_LINE2, "Roboter " + NumToStr(roboter_nummer));
+    TextOut(0, LCD_LINE3, "================");
+
+    string antwort;
+    for(byte i = 0; i < ANZAHL_ZUEGE; i++) {
+        while(!USBMsgAvailable()) {
+            Wait(1);
+        }
+        antwort = USBReceive();
+        //ClearLine(LCD_LINE4);
+        //TextOut(0, LCD_LINE4, antwort);
+        
+        //Schreiben der Nummer in nummer und des Befehls in antwort.
+        int nummer = StrToNum(antwort);
+        string nummer_str = NumToStr(nummer);
+        antwort = SubStr(antwort, Pos("_", antwort) + 1, 20);
+        //TextOut(0, LCD_LINE6, antwort);
+        switch(antwort) {
+            case "left":
+                karten[i] = BEFEHL_LINKS * 1000;
+                break;
+            case "right":
+                karten[i] = BEFEHL_RECHTS * 1000;
+                break;
+            case "uturn":
+                karten[i] = BEFEHL_WENDE * 1000;
+                break;
+            case "forward1":
+                karten[i] = BEFEHL_VOR_1 * 1000;
+                break;
+            case "forward2":
+                karten[i] = BEFEHL_VOR_2 * 1000;
+                break;
+            case "forward3":
+                karten[i] = BEFEHL_VOR_3 * 1000;
+                break;
+            case "backward":
+                karten[i] = BEFEHL_RUECK * 1000;
+                break;
+            
+        }
+        karten[i] += nummer;
+        
+        //ClearLine(LCD_LINE5);
+        //NumOut(0, LCD_LINE5, karten[i]);
+    }
+    USBSend("ok");
+    LCD_Out("Karten fuer Roboter " + NumToStr(roboter_nummer) + " eingelesen!", 2000);
+    
+    /* 
+    //Karten zufaellig waehlen
+    byte random = 0;
+    
+    for(byte i = 0; i < ANZAHL_ZUEGE; i++) {
+        random = BEFEHL_RUECK;
+        while(random == BEFEHL_RUECK) {
+            random = (Random(6)+1);
+        }
+        karten[i] = random * 1000 + Random(600);
+    }
+    */
+}
+
+/**
+ * @brief Liest alle Karten einer Runde ein und speichert sie im {@link robo Roboter Array}
+ * @see {@link robo Roboter Array}
+ */
+void LeseKartenEin(void)
+{
+    USBSend("hideTable");
+    
+    int karten[ANZAHL_ZUEGE];
+    for(byte r = 0; r < ANZAHL_ROBOTER; r++) {
+        if(RoboLebt(r)) {
+            //Lese Karten nur ein, wenn Roboter noch lebt!
+            BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_BLINK);
+            //Lese Karten fuer aktuellen Roboter ein und schreibe sie in die
+            //temporaere Variable "karten". Direkt danach werden die Karten im
+            //Roboter-Array gespeichert.
+            KartenEinlesen(r, karten);
+            robo[r].karten = karten;
+            BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_BLINK_STOP);
+        }
+    }
+    USBSend("showTable");
+}
+
+/**
+ * @brief Berechnet die Reihenfolge der Roboter in einem bestimmten Zug
+ * aufgrund der Kartennummer
+ * @param byte zug Der Zug
+ * @param byte &reihenfolge[] Das Ausgabearray, in das die Reihenfolge 
+ * geschrieben werden soll.
+ */
+void ErrechneReihenfolge(byte zug, byte &reihenfolge[])
+{
+    //Reihenfolge Array resetten: 0, 1, 2, 3, ...
+    //D.h. Roboter 0 ist zuerst dran, dann Roboter 1, usw. 
+    for(byte i = 0; i < ANZAHL_ROBOTER; i++)
+        reihenfolge[i] = i;
+    
+    //Kartennummern Array
+    int kartennummern[ANZAHL_ROBOTER];
+    
+    //Lese Kartennummern der Roboter ein
+    for(byte r = 0; r < ANZAHL_ROBOTER; r++)
+        kartennummern[r] = RoboKartennummer(r, zug);
+        
+    //Sortiere die Arrays nach der niedrigsten Kartennummer
+    byte i, j;
+    for (i = 0; i < ANZAHL_ROBOTER - 1; ++i) 
+    {
+        for (j = 0; j < ANZAHL_ROBOTER - i - 1; ++j) 
+        {
+            if (kartennummern[j] > kartennummern[j + 1]) 
+            {
+                int tmp = kartennummern[j];
+                kartennummern[j] = kartennummern[j + 1];
+                kartennummern[j + 1] = tmp;
+                
+                tmp = reihenfolge[j];
+                reihenfolge[j] = reihenfolge[j + 1];
+                reihenfolge[j + 1] = tmp;
+            }
+        }
+    }
+}
+
+/**
+ * @brief Bewegt einen Roboter in eine bestimmte Richtung Dabei wird ein anderer Roboter
+ * evt. weggeschoben oder vor einer Mauer gestoppt.
+ * @param byte r_blocker Roboter zum wegbewegen
+ * @param byte richtung_schieber Die Richtung, in die der Roboter fahren soll
+ * @return bool True: Roboter is weggefahren | False: Roboter ist nicht weggefahren
+ *
+ * @note Pseudo Rekursion
+ * @see BewegeRoboterInRichtung_rek2()
+ * @see BewegeRoboterInRichtung_rek1()
+ *
+ * @todo Nicht der Master, sondern der Slave sollte piepen!
+ */
+bool BewegeRoboterInRichtung_rek3(byte r_blocker, byte richtung_schieber)
+{
+    byte richtung_blocker_alt = RoboGetAusrichtung(r_blocker);
+    DreheRoboterInRichtung(r_blocker, richtung_schieber);
+
+    char tmp = RoboPositionUmEinsNachVorne(r_blocker);
+    bool gefahren = false;
+    switch(tmp) {
+    case -1: //Alles ok
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_NACH_VORNE);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN_STOP);
+        gefahren = true;
+    break;
+        break;
+    case -2: //Mauer im Weg
+        //Nichts zu tun
+        gefahren = false;
+        break;
+    case -3: //Ausserhalb des Spielfelds
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_NACH_VORNE_AUS_FELD);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN_STOP);
+        RoboterToeten(r_blocker);
+        gefahren = true;
+        break;
+    //Kein "default". Es kann kein anderer Roboter mehr im Weg sein, da es maximal nur 3 Roboter gibt.
+    }
+    
+    //Roboter wieder in Ausgangsrichtung zurueckdrehen.
+    DreheRoboterInRichtung(r_blocker, richtung_blocker_alt);
+
+    return gefahren;
+}
+
+/**
+ * @brief Bewegt einen Roboter in eine bestimmte Richtung Dabei wird ein anderer Roboter
+ * evt. weggeschoben oder vor einer Mauer gestoppt.
+ * @param byte r_blocker Roboter zum wegbewegen
+ * @param byte richtung_schieber Die Richtung, in die der Roboter fahren soll
+ * @return bool True: Roboter is weggefahren | False: Roboter ist nicht weggefahren
+ *
+ * @note Pseudo Rekursion
+ * @see BewegeRoboterInRichtung_rek1()
+ *
+ * @todo Nicht der Master, sondern der Slave sollte piepen!
+ */
+bool BewegeRoboterInRichtung_rek2(byte r_blocker, byte richtung_schieber)
+{
+    byte richtung_blocker_alt = RoboGetAusrichtung(r_blocker);
+    DreheRoboterInRichtung(r_blocker, richtung_schieber);
+
+    char tmp = RoboPositionUmEinsNachVorne(r_blocker);
+    bool gefahren = false;
+    switch(tmp) {
+    case -1: //Alles ok
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_NACH_VORNE);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN_STOP);
+        gefahren = true;
+    break;
+        break;
+    case -2: //Mauer im Weg
+        //Nichts zu tun
+        gefahren = false;
+        break;
+    case -3: //Ausserhalb des Spielfelds
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_NACH_VORNE_AUS_FELD);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN_STOP);
+        RoboterToeten(r_blocker);
+        gefahren = true;
+        break;
+    default: //Anderer Roboter im Weg, naemlich "tmp"
+        if(BewegeRoboterInRichtung_rek3(tmp, RoboGetAusrichtung(r_blocker))) {
+            //Anderer Roboter wurde erfolgreich weggeschoben.
+            char tmp = RoboPositionUmEinsNachVorne(r_blocker); //tmp muss nicht geprueft werden.
+            BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_NACH_VORNE);
+            gefahren = true;
+        } else {
+            //Anderer Roboter konnte nicht weggeschoben werden!
+            PlayTone(500, 500);
+            gefahren = false;
+        }
+        break;
+    }
+    
+    //Roboter wieder in Ausgangsrichtung zurueckdrehen.
+    DreheRoboterInRichtung(r_blocker, richtung_blocker_alt);
+
+    return gefahren;
+}
+
+/**
+ * @brief Bewegt einen Roboter in eine bestimmte Richtung Dabei wird ein anderer Roboter
+ * evt. weggeschoben oder vor einer Mauer gestoppt.
+ * @param byte r_blocker Roboter zum wegbewegen
+ * @param byte richtung_schieber Die Richtung, in die der Roboter fahren soll
+ * @return bool True: Roboter is weggefahren | False: Roboter ist nicht weggefahren
+ *
+ * @see BewegeRoboterNachVorne()
+ * @see BewegeRoboterNachHinten()
+ *
+ * @todo Nicht der Master, sondern der Slave sollte piepen!
+ */
+bool BewegeRoboterInRichtung_rek1(byte r_blocker, byte richtung_schieber)
+{
+    byte richtung_blocker_alt = RoboGetAusrichtung(r_blocker);
+    DreheRoboterInRichtung(r_blocker, richtung_schieber);
+
+    char tmp = RoboPositionUmEinsNachVorne(r_blocker);
+    bool gefahren = false;
+    switch(tmp) {
+    case -1: //Alles ok
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_NACH_VORNE);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN_STOP);
+        gefahren = true;
+    break;
+        break;
+    case -2: //Mauer im Weg
+        //Nichts zu tun
+        gefahren = false;
+        break;
+    case -3: //Ausserhalb des Spielfelds
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_NACH_VORNE_AUS_FELD);
+        BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_PIEPEN_STOP);
+        RoboterToeten(r_blocker);
+        gefahren = true;
+        break;
+    default: //Anderer Roboter im Weg, naemlich "tmp"
+        if(BewegeRoboterInRichtung_rek2(tmp, RoboGetAusrichtung(r_blocker))) {
+            //Anderer Roboter wurde erfolgreich weggeschoben.
+            char tmp = RoboPositionUmEinsNachVorne(r_blocker); //tmp muss nicht geprueft werden.
+            BluetoothBefehlSenden(RoboGetKanal(r_blocker), BLUETOOTH_NACH_VORNE);
+            gefahren = true;
+        } else {
+            //Anderer Roboter konnte nicht weggeschoben werden!
+            PlayTone(500, 500);
+            gefahren = false;
+        }
+        break;
+    }
+
+    //Roboter wieder in Ausgangsrichtung zurueckdrehen.
+    DreheRoboterInRichtung(r_blocker, richtung_blocker_alt);
+
+    return gefahren;
+}
+
+/**
+ * @brief Bewegt einen Roboter um eins nach vorne. Dabei wird ein anderer Roboter
+ * evt. weggeschoben oder vor einer Mauer gestoppt.
+ * @param byte r Roboter
+ * @todo Nicht der Master, sondern der Slave sollte piepen!
+ */
+void BewegeRoboterNachVorne(byte r)
+{
+    char tmp = RoboPositionUmEinsNachVorne(r);
+
+    switch(tmp)
+    {
+    case -1: //Alles ok
+        BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_NACH_VORNE);
+    break;
+        break;
+    case -2: //Mauer im Weg
+        //Nichts zu tun
+        break;
+    case -3: //Ausserhalb des Spielfelds
+        BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_NACH_VORNE_AUS_FELD);
+        RoboterToeten(r);
+        break;
+    default: //Anderer Roboter im Weg, naemlich "tmp"
+        if(BewegeRoboterInRichtung_rek1(tmp, RoboGetAusrichtung(r))) {
+            //Anderer Roboter wurde erfolgreich weggeschoben.
+            char tmp = RoboPositionUmEinsNachVorne(r); //tmp muss nicht geprueft werden.
+            BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_NACH_VORNE);
+        } else {
+            //Anderer Roboter konnte nicht weggeschoben werden!
+            PlayTone(500, 500);
+        }
+        break;
+    }
+}
+
+/**
+ * @brief Bewegt einen Roboter um eins nach hinten. Dabei wird ein anderer Roboter
+ * evt. weggeschoben oder vor einer Mauer gestoppt.
+ * @param byte r Roboter
+ * @todo Nicht der Master, sondern der Slave sollte piepen!
+ */
+void BewegeRoboterNachHinten(byte r)
+{
+    char tmp = RoboPositionUmEinsNachHinten(r);
+    switch(tmp) {
+    case -1: //Alles ok
+        BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_NACH_HINTEN);
+    break;
+        break;
+    case -2: //Mauer im Weg
+        //Nichts zu tun
+        break;
+    case -3: //Ausserhalb des Spielfelds
+        BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_NACH_HINTEN_AUS_FELD);
+        RoboterToeten(r);
+        break;
+    default: //Anderer Roboter im Weg, naemlich "tmp"
+        if(BewegeRoboterInRichtung_rek1(tmp, RoboGetAusrichtungHinten(r))) {
+            //Anderer Roboter wurde erfolgreich weggeschoben.
+            char tmp = RoboPositionUmEinsNachHinten(r); //tmp muss nicht geprueft werden.
+            BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_NACH_HINTEN);
+        } else {
+        //Anderer Roboter konnte nicht weggeschoben werden!
+            PlayTone(500, 500);
+        }
+        break;
+    }
+}
+
+/**
+ * @brief Dreht den Roboter nach links.
+ * @param byte r Roboter
+ */
+void DreheRoboterNachLinks(byte r)
+{
+    RoboAusrichtungUmEinsNachLinks(r);
+    BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_NACH_LINKS);
+}
+
+/**
+ * @brief Dreht den Roboter nach rechts.
+ * @param byte r Roboter
+ */
+void DreheRoboterNachRechts(byte r)
+{
+    RoboAusrichtungUmEinsNachRechts(r);
+    BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_NACH_RECHTS);
+}
+
+/**
+ * @brief Gibt Rundeninformationen auf dem Bildschirm aus.
+ * @param byte runde Die Rundennummer
+ * @param byte zug Die Zugnummer
+ * @param byte r Die Roboternummer
+ *
+ * @deprecated
+ * @note Loescht den gesamten Bildschirm
+ */
+void RundenScreen(byte runde, byte zug, byte r)
+{
+    ClearScreen();
+    TextOut(0, LCD_LINE1, "Runde " + NumToStr(runde), true);
+    TextOut(0, LCD_LINE2, "================", false);
+    TextOut(0, LCD_LINE3, "Zug " + NumToStr(zug), false);
+    TextOut(0, LCD_LINE4, "----------------", false);
+    TextOut(0, LCD_LINE5, "Roboter " + NumToStr(r), false);
+    NumOut(0, LCD_LINE6, robo[r].position_x, false);
+    NumOut(0, LCD_LINE7, robo[r].position_y, false);
+    NumOut(0, LCD_LINE8, robo[r].ausrichtung, false);
+    Wait(500);
+}
+
+/**
+ * @brief Toetet einen Roboter.
+ * @param byte r Roboternummer
+ * @todo Erst nach Ende einer Runde wiederbeleben!
+ * @todo Nicht auf Feldern wiederbeleben, wo ein anderer Roboter steht
+ */
+void RoboterToeten(byte r)
+{
+    if(RoboLebt(r))
+    {
+        BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_TOT);
+        //Reduziere Leben
+        RoboSetLeben(r, RoboGetLeben(r) - 1);
+        
+        //Sende reduzierte Leben an PC.
+        USBSend("lives_" + NumToStr(r) + "_" + NumToStr(RoboGetLeben(r)) + "_0");
+        
+        //Setze Roboter in Pause Modus
+        RoboSetPause(r, true);
+        
+        BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_BLINK);
+        if(RoboGetLeben(r) == 0)
+        {
+            //Setze Position auf einen unbestimmten Wert(255, 255).
+            RoboSetPosition(r, 255, 255);
+            LCD_Out("Roboter " + NumToStr(r) + " hat kein Leben mehr! Bitte nimm ihn vom Feld!", -1);
+        }
+        else
+        {
+            byte x, y, ausrichtung;
+            RoboGetCheckpoint(r, x, y, ausrichtung);
+
+            LCD_Out("Roboter " + NumToStr(r) + " hat ein Leben verloren! Bitte nimm ihn vom Feld und stelle ihn ausgerichtet nach " + Ausrichtung2String(ausrichtung) + " nach X:" + NumToStr(x) + " und Y:" + NumToStr(y) + "!", -1);
+            RoboSetPosition(r, x, y);
+            RoboSetAusrichtung(r, ausrichtung);
+            //LCD_Out("Roboter " + NumToStr(r) + " hat nur noch " + NumToStr(RoboGetLeben(r)) + " Leben!", 1000);
+        }
+        BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_BLINK_STOP);
+    }
+}
+
+/**
+ * @brief Toetet alle Roboter, die in einem Loch stehen.
+ */
+void RoboterImLochToeten(void)
+{
+    byte x, y;
+    
+    for(byte r = 0; r < ANZAHL_ROBOTER; r++)
+    {
+        RoboGetPosition(r, x, y);
+        if(Boden(x, y) == FELDTYP_LOCH)
+            RoboterToeten(r);
+    }
+}
+
+/**
+ * @brief Gibt das ganze Spielfeld sowie Roboterinformationen grafisch auf dem Display aus.
+ * @param byte runde Die derzeitige Runde
+ * @param byte zug Der derzeitige Zug
+ * @param byte roboternummer Der Roboter, der gerade dran ist.
+ *
+ * @note Loescht den ganzen Bildschirm.
+ */
+void SpielAusgeben(byte runde, byte zug, byte roboternummer)
+{
+#if SPIELFELD_AUSGEBEN==1 || 1
+    const byte KASTEN = 6; //10;
+    const byte KASTEN_LAENGE = KASTEN + 1;
+    const byte KASTEN_HALB = KASTEN / 2;
+
+    ClearScreen();
+    
+    for(byte y = 0; y < DISPLAY_HEIGHT / KASTEN_LAENGE; y++) {
+        for(byte x = 0; x < DISPLAY_WIDTH / KASTEN_LAENGE; x++) {
+            if(KoordinatenOk(x, y)) {
+                if(MauerSueden(x, y))
+                    LineOut(x * KASTEN_LAENGE, y * KASTEN_LAENGE, x * KASTEN_LAENGE + KASTEN_LAENGE, y * KASTEN_LAENGE);
+                if(MauerWesten(x, y))
+                    LineOut(x * KASTEN_LAENGE, y * KASTEN_LAENGE, x * KASTEN_LAENGE, y * KASTEN_LAENGE + KASTEN_LAENGE);
+                if(MauerOsten(x, y))
+                    LineOut(x * KASTEN_LAENGE + KASTEN_LAENGE, y * KASTEN_LAENGE, x * KASTEN_LAENGE + KASTEN_LAENGE, y * KASTEN_LAENGE + KASTEN_LAENGE);
+                if(MauerNorden(x, y))
+                    LineOut(x * KASTEN_LAENGE, y * KASTEN_LAENGE + KASTEN_LAENGE, x * KASTEN_LAENGE + KASTEN_LAENGE, y * KASTEN_LAENGE + KASTEN_LAENGE);
+
+                PointOut(x * KASTEN_LAENGE, y * KASTEN_LAENGE);
+                
+                char r = RoboAufFeld(x, y);
+            
+                if(Boden(x, y) == FELDTYP_LOCH) {
+                    LineOut(x * KASTEN_LAENGE, y * KASTEN_LAENGE, x * KASTEN_LAENGE + KASTEN, y * KASTEN_LAENGE + KASTEN);
+                    LineOut(x * KASTEN_LAENGE + KASTEN, y * KASTEN_LAENGE, x * KASTEN_LAENGE, y * KASTEN_LAENGE + KASTEN);
+                } else if(Boden(x, y) == FELDTYP_CHECKPOINT) {
+                    LineOut(x * KASTEN_LAENGE + KASTEN_HALB, y * KASTEN_LAENGE, x * KASTEN_LAENGE + KASTEN_HALB, y * KASTEN_LAENGE + KASTEN);
+                    LineOut(x * KASTEN_LAENGE, y * KASTEN_LAENGE + KASTEN_HALB, x * KASTEN_LAENGE + KASTEN, y * KASTEN_LAENGE + KASTEN_HALB);
+                }
+            
+                if(r != -1) {
+                    CircleOut(x * KASTEN_LAENGE + KASTEN_HALB, y * KASTEN_LAENGE + KASTEN_HALB, KASTEN_HALB);
+                    switch(RoboGetAusrichtung(r)) {
+                    case 1:
+                        LineOut(x * KASTEN_LAENGE + KASTEN_HALB, y * KASTEN_LAENGE + KASTEN_HALB, x * KASTEN_LAENGE + KASTEN_HALB, y * KASTEN_LAENGE + KASTEN);
+                        break;
+                    case 2:
+                        LineOut(x * KASTEN_LAENGE + KASTEN_HALB, y * KASTEN_LAENGE + KASTEN_HALB, x * KASTEN_LAENGE + KASTEN, y * KASTEN_LAENGE + KASTEN_HALB);
+                        break;
+                    case 3:
+                        LineOut(x * KASTEN_LAENGE + KASTEN_HALB, y * KASTEN_LAENGE + KASTEN_HALB, x * KASTEN_LAENGE + KASTEN_HALB, y * KASTEN_LAENGE);
+                        break;
+                    case 4:
+                        LineOut(x * KASTEN_LAENGE + KASTEN_HALB, y * KASTEN_LAENGE + KASTEN_HALB, x * KASTEN_LAENGE, y * KASTEN_LAENGE + KASTEN_HALB);
+                        break;
+                    }
+                }
+            } else {
+                LineOut(x * KASTEN_LAENGE, y * KASTEN_LAENGE, x * KASTEN_LAENGE + KASTEN, y * KASTEN_LAENGE + KASTEN);
+                LineOut(x * KASTEN_LAENGE + KASTEN, y * KASTEN_LAENGE, x * KASTEN_LAENGE, y * KASTEN_LAENGE + KASTEN);
+            }
+        }
+    }
+
+    //TextOut(X_MAX, LCD_LINE1, "Ru:" + NumToStr(runde));
+    //TextOut(X_MAX, LCD_LINE2, "Zu:" + NumToStr(zug));
+    //TextOut(X_MAX, LCD_LINE3, "Ro:" + NumToStr(roboternummer));
+    
+    //for(roboternummer = 0; roboternummer < ANZAHL_ROBOTER && roboternummer < 5; roboternummer++) {
+    //    TextOut(X_MAX, LCD_LINE4 - 8 * roboternummer, "R" + NumToStr(roboternummer) + ": " + NumToStr(RoboGetLeben(roboternummer)));
+    //}
+#endif    
+}
+
+/**
+ * @brief Wartet auf das druecken des EXIT-Knopfs, um die Slave Programme zu beenden.
+ */
+task abortExecution()
+{
+    //Warte auf EXIT Button
+    while(!(ButtonPressed(BTNEXIT, 0)));
+    
+    //Stoppe den main Task.
+    StopTask(main);
+    
+    TextOut(0, LCD_LINE3, "================", true);
+    TextOut(0, LCD_LINE4, "|   Programm   |");
+    TextOut(0, LCD_LINE5, "|   beendet!   |");
+    TextOut(0, LCD_LINE6, "================");
+    
+    for(byte r = 0; r < ANZAHL_ROBOTER; r++) {
+        BTStopProgram(RoboGetKanal(r));
+    }
+    Wait(1000);
+    
+    //closeLogFile();
+    
+    Stop(1);
+}
+
+/**
+ * @brief Sendet den Batterie-Level aller Slaves ueber USB an den Computer.
+ */
+void SendeSlaveInfosViaUsb()
+{
+    int batteryLevel = 0;
+ 
+    for(byte r = 0; r < ANZAHL_ROBOTER; r++) {
+        batteryLevel = BluetoothGetBatteryLevel(RoboGetKanal(r));
+        USBSend("battery_" + NumToStr(r) + "_" + NumToStr(batteryLevel));
+        USBSend("lives_" + NumToStr(r) + "_" + NumToStr(RoboGetLeben(r)) + "_0");
+    }
+}
+
+/**
+ * @brief Aktualisiert die Checkpoints der Roboter.
+ */
+void CheckPointsAktualisieren()
+{
+    byte x, y;
+    
+    for(byte r = 0; r < ANZAHL_ROBOTER; r++)
+    {
+        RoboGetPosition(r, x, y);
+        if(Boden(x, y) == FELDTYP_CHECKPOINT) {
+            BluetoothBefehlSenden(RoboGetKanal(r), BLUETOOTH_CHECKPOINT);
+            RoboSetCheckpoint(r, x, y, RoboGetAusrichtung(r));
+        }
+    }
+}
+
+/**
+ * @brief Main Task
+ * @callgraph
+ */
+task main()
+{
+    //Programm nur beenden, wenn grauer Knopf LANGE gedrueckt, siehe auch "task abortExecution() {}"
+    SetLongAbort(true);
+    StartTask(abortExecution);
+    
+    //Verhindere automatisches Abschalten des Masters
+    SetSleepTime(0);
+    SetSleepTimeout(0);
+
+    //Zeigt ein paar Debug Informationen an
+    InformationenAnzeigen(1500);
+
+    //Lese Spielfeld ein
+    string feldName = SPIELFELD;
+    if(SpielfeldEinlesen(feldName) != 1) {
+        //Error
+        LCD_Out("Spielfeld \"" + feldName + "\" konnte nicht gelesen werden!", 2000);
+        Stop(true);
+    }
+    LCD_Out("Spielfeld eingelesen!", 2000);
+
+    //SpielfeldAusgeben(0);
+    
+    //Setzt das Roboter Array auf die Standardwerte
+    ResetRoboArray();
+    
+    //Bluetoothverbindung mit anderen Robotern aufbauen
+    for(byte r = 0; r < ANZAHL_ROBOTER; r++)
+    {
+        // Baue Verbindung auf. Die Slaves muessen "Slave0", "Slave1", usw. heissen.
+        BTConnectNXT(RoboGetKanal(r), "Slave" + NumToStr(r));
+        Wait(1000);
+        // Stoppe eventuell laufendes Programm.
+        BTStopProgram(RoboGetKanal(r));
+        Wait(500);
+        // Starte Slave Programm
+        BTStartProgram(RoboGetKanal(r), "Slave");
+        Wait(500);   
+    }
+    
+    //Warten auf USB-Verbindung
+    while(!USBIsConnected()) {
+       TextOut(0, LCD_LINE1, "Bitte den NXT   ", true);
+       TextOut(0, LCD_LINE2, "ueber USB an den");
+       TextOut(0, LCD_LINE3, "PC anschliessen!");
+       Wait(500);
+    }    
+    
+    SendeSlaveInfosViaUsb();
+
+    // Array fuer die Reihenfolge der Roboter innerhalb eines Zuges.
+    byte reihenfolge[ANZAHL_ROBOTER];
+
+    //Schleife fuer 65535 Runden.
+    for(unsigned int runde = 0; runde < UINT_MAX; runde++)
+    {
+        LeseKartenEin();
+        ErweckeRoboterAusPause();
+        SendeSlaveInfosViaUsb();        
+        
+        // Vorabberechnung der Reihenfolge des ersten Zugs, um den startenden Roboter zu ermitteln.
+        ErrechneReihenfolge(0, reihenfolge);
+        
+        // Warte auf OK, dass Runde starten kann.
+        LCD_Out("Runde " + NumToStr(runde) + " startet jetzt. Der erste Roboter ist \"Slave" + NumToStr(reihenfolge[0]) + "\". Bitte ORANGE druecken! ", -1);
+        while(!(ButtonPressed(BTNCENTER, 0)));
+        
+        //Schleife fuer jeden Zug
+        for(byte zug = 0; zug < ANZAHL_ZUEGE; zug++)
+        {
+            // Schreibe Reihenfolge eines Zuges in das "reihenfolge" Array.
+            ErrechneReihenfolge(zug, reihenfolge);
+
+            //Lasse jeden Roboter fahren, wenn moeglich.
+            for(byte platzierung = 0; platzierung < ANZAHL_ROBOTER; platzierung++)
+            {
+                //Lese die Nummer des Roboters, der jetzt dran ist in r ein.
+                byte r = reihenfolge[platzierung];
+                
+                if(RoboLebt(r) && RoboGetPause(r) == false)
+                {
+                    USBSend("status_" + NumToStr(runde) + "_" + NumToStr(zug) + "_" + NumToStr(r));
+                    //RundenScreen(runde, zug, r);
+                    RoboSetZug(r, zug);
+                
+                    byte befehl = RoboBefehl(r, zug);
+                
+                    SpielAusgeben(runde, zug, r);
+                    
+                    switch(befehl) {
+                    case BEFEHL_RECHTS:
+                        DreheRoboterNachRechts(r);
+                        break;
+                    case BEFEHL_WENDE:
+                        DreheRoboterNachLinks(r);
+                        //Kein break;!
+                    case BEFEHL_LINKS:
+                        DreheRoboterNachLinks(r);
+                        break;
+                    case BEFEHL_VOR_3:
+                        BewegeRoboterNachVorne(r);
+                        RoboterImLochToeten();
+                        if(RoboGetPause(r) == true) {
+                            //Roboter gestorben, verhindere Durchrutschen zum nochmaligen vorwaerts fahren.
+                            break;
+                        }
+                        //Kein break!
+                    case BEFEHL_VOR_2:
+                        BewegeRoboterNachVorne(r);
+                        RoboterImLochToeten();
+                        if(RoboGetPause(r) == true) {
+                            //Roboter gestorben, verhindere Durchrutschen zum nochmaligen vorwaerts fahren.
+                            break;
+                        }
+                        //Kein break!
+                    case BEFEHL_VOR_1:
+                        BewegeRoboterNachVorne(r);
+                        RoboterImLochToeten();
+                        break;
+                    case BEFEHL_RUECK:
+                        BewegeRoboterNachHinten(r);
+                        RoboterImLochToeten();
+                        break;
+                    }
+                }
+                
+                // Bewegung ENDE (Ein Roboter hat sich bewegt)
+                
+                SpielAusgeben(runde, zug, r);  
+            } 
+            // Zug ENDE (Alle Roboter haben sich 1x bewegt)
+            
+            #if CHECKPOINT_UPDATE==NACH_ZUG
+                // Aktualisiere Checkpoints aller Roboter
+                CheckPointsAktualisieren();
+            #endif
+        
+            RoboterImLochToeten();
+
+        }        
+        // Runde ENDE (Alle Roboter haben sich 5x bewegt)
+        
+        #if CHECKPOINT_UPDATE==NACH_RUNDE
+            // Aktualisiere Checkpoints aller Roboter
+            CheckPointsAktualisieren();
+        #endif
+        
+        ///@todo Foerderbaender aktivieren
+        
+        ///@todo Spielfeldlaser aktivieren
+        
+        ///@todo Roboterlaser aktivieren  
+    }
+}

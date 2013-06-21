@@ -1,0 +1,64 @@
+/**
+ * @file Sonstiges.nxc
+ */
+
+/**
+ * @brief Gibt Text mehrzeilig auf dem Bildschirm aus.
+ * @param string text Der Text zum Ausgeben.
+ * @param unsigned int dauer Die Anzeigedauer in Millisekunden.
+ *
+ * @note Loescht vorher das ganze Display und beginnt immer in der ersten Zeile.
+ */
+void LCD_Out(string text, long dauer)
+{
+	ClearScreen();
+	byte laenge = StrLen(text);
+	for(byte i = 0; i < (laenge / LCD_ZEICHEN_PRO_ZEILE)+0.5; i++)
+		TextOut(0, 56 - 8 * i, SubStr(text, i * LCD_ZEICHEN_PRO_ZEILE, LCD_ZEICHEN_PRO_ZEILE + 1), false);
+
+    if (dauer > 0) {
+        Wait(dauer);
+        ClearScreen();
+    } else if (dauer == 0) {
+        
+    } else if (dauer == -1) {
+        while(!ButtonPressed(BTNCENTER, false)) {
+            Wait(10);
+        }
+        ClearScreen();
+    }
+	
+}
+
+/**
+ * @brief Zeigt einige Informationen ueber das Programm an.
+ * @param int dauer Die Anzeigedauer
+ */
+void InformationenAnzeigen(unsigned int dauer)
+{
+	ClearScreen();
+	TextOut(0, LCD_LINE1, "Roboter:");
+	NumOut(0, LCD_LINE2, ANZAHL_ROBOTER);
+	
+	TextOut(0, LCD_LINE3, "Zuege:");
+	NumOut(0, LCD_LINE4, ANZAHL_ZUEGE);
+	
+	Wait(dauer);
+	ClearScreen();
+}
+
+/**
+ * @brief Gibt ein eindimensionales, numerisches Array auf dem Bildschirm aus
+ * @param int array[] Das auszugebende Array
+ * @param int dauer Die Anzeigedauer jedes Array-Elements
+ *
+ * @test Ungetestet!
+ */
+void ArrayAusgeben(int &array[], byte length, unsigned int dauer)
+{
+	for(byte i = 0; i < length; i++)
+	{
+		NumOut(0, LCD_LINE1, array[i], true);
+		Wait(dauer);
+	}
+}

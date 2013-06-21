@@ -1,0 +1,141 @@
+#ifndef __KALIBRIERUNG_NXC__
+#define __KALIBRIERUNG_NXC__
+
+#define OFFSET 20
+/*
+gruen:
+SENSOR 1: 670
+SENSOR 2: 550
+
+schwarz:
+SENSOR 1: 450 
+SENSOR 2: 340
+
+weiss:
+SENSOR 1: 730
+SENSOR 2: 620
+*/
+
+byte lightHandle = 0;
+
+int blackRightVal;
+int blackLeftVal;
+int whiteRightVal;
+int whiteLeftVal;
+
+void openLightFile() {
+    if (lightHandle == 0) {
+	   unsigned int groesse;
+	   unsigned int errorCode;
+	
+	   ///Oeffnet die Spielfelddatei. Ich bin nicht ganz sicher, ob das so wirklich funktioniert.
+	   errorCode = OpenFileRead("Licht.txt", groesse, lightHandle);
+	   if(errorCode != LDR_SUCCESS) {
+            //Fehler zurueckgeben, wenn Datei nicht geoeffnet werden konnte.
+	        ClearScreen();
+	        TextOut(0, LCD_LINE1, "Kalibrierung", 0x1000);
+	        TextOut(0, LCD_LINE2, "muss durchge-", 0x1000);
+	        TextOut(0, LCD_LINE3, "fuehrt werden!", 0x1000);
+	        TextOut(0, LCD_LINE4, "================", 0x1000);
+	            
+	        switch(errorCode) {
+	           case LDR_FILENOTFOUND:
+	               TextOut(0, LCD_LINE5, "Datei nicht ge-", 0x1000);
+	               TextOut(0, LCD_LINE6, "funden!", 0x1000);
+	               while(1);
+	               break;
+	           default:
+	               TextOut(0, LCD_LINE5, "Unbekannter", 0x1000);
+	               TextOut(0, LCD_LINE6, "Fehler: " + NumToStr(errorCode), 0x1000);
+	               while(1);
+	               break;
+	        }
+        }
+    
+        ReadLn(lightHandle, blackRightVal);
+	    ReadLn(lightHandle, blackLeftVal);
+	    ReadLn(lightHandle, whiteRightVal);
+	    ReadLn(lightHandle, whiteLeftVal);
+    }
+}
+
+void closeLightFile() {
+    CloseFile(lightHandle);
+}
+
+#ifndef ONLY_READING
+
+#include "Bewegung.nxc"
+task main() {
+	unsigned int errorCode;
+    ///Oeffnet die Lichtsensorwertedatei.
+	DeleteFile("Licht.txt");
+	errorCode = CreateFile("Licht.txt", 1024, lightHandle);
+	if(errorCode != LDR_SUCCESS) {
+        //Fehler zurueckgeben, wenn Datei nicht erstellt werden konnte.
+	    TextOut(0, LCD_LINE1, "Datei konnte", 0x1000);
+	    TextOut(0, LCD_LINE2, "nicht erstellt", 0x1000);
+	    TextOut(0, LCD_LINE3, "werden: " + NumToStr(errorCode), 0x1000);
+	    Wait(2000);
+    	Stop(1);
+    }
+	
+    InitSensors();
+    TextOut(0, LCD_LINE1, "Kalibrations-", 0x1000);
+    TextOut(0, LCD_LINE2, "programm", 0x1000);
+    TextOut(0, LCD_LINE3, "================", 0x1000);
+    
+    // Schwarz
+    TextOut(0, LCD_LINE4, "Sensoren schwarz", 0x1000);
+    while(!ButtonPressed(BTNCENTER, true));
+    TextOut(0, LCD_LINE5, "....Messung....", 0x1000);
+    long startTick = 0;
+    long lightValueR = 0;
+    long lightValueL = 0;
+    int counter = 0;
+    for(startTick = CurrentTick(); CurrentTick() < startTick + 1000; counter++) {
+        lightValueR += Sensor(IN_1);
+        lightValueL += Sensor(IN_2); 
+    }
+    ClearLine(LCD_LINE5);
+    PlayTone(500, 500);
+    lightValueR /= counter;
+    lightValueL /= counter;
+
+    string tmp1, tmp2;
+    tmp1 = NumToStr(lightValueR + OFFSET);
+    tmp2 = NumToStr(lightValueL + OFFSET);
+	WriteLn(lightHandle, tmp1);
+    WriteLn(lightHandle, tmp2);
+	
+	
+	// Weiss
+	TextOut(0, LCD_LINE4, "Sensoren weiss", 0x1000);
+    while(!ButtonPressed(BTNCENTER, true));
+    TextOut(0, LCD_LINE5, "....Messung....", 0x1000);
+    startTick = 0;
+    lightValueR = 0;
+    lightValueL = 0;
+    counter = 0;
+    for(startTick = CurrentTick(); CurrentTick() < startTick + 1000; counter++) {
+        lightValueR += Sensor(IN_1);
+        lightValueL += Sensor(IN_2); 
+    }
+    ClearLine(LCD_LINE5);
+    PlayTone(500, 500);
+    lightValueR /= counter;
+    lightValueL /= counter;
+
+	tmp1 = NumToStr(lightValueR + OFFSET);
+    tmp2 = NumToStr(lightValueL + OFFSET);
+	WriteLn(lightHandle, tmp1);
+    WriteLn(lightHandle, tmp2);
+	
+	
+	CloseFile(lightHandle);
+	Wait(500);
+	Stop(1);
+}
+#endif
+
+#endif

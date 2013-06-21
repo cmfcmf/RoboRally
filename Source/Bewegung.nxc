@@ -1,0 +1,294 @@
+/**
+ * @file Bewegung.nxc
+ */
+#define ONLY_READING 1 ///< Verhindere die Kompilierung des "task main()" aus Kalibrierung.nxc
+#include "Kalibrierung.nxc"
+
+/**
+ * @name Definitionen fuer die Motoren.
+ * @{
+ */
+#define MOTOREN OUT_AB
+#define MOTOR_R OUT_B
+#define MOTOR_L OUT_A
+/**@}*/
+
+#define cm2deg(X) ((X)*204.627783975)
+
+void moveStop();
+void lineFollow(string abortType, unsigned int timeOffset, long count, byte motorTwoStrength);
+
+/**
+ * @return bool Ob der linke Lichtsensor schwarz sieht.
+ */
+bool IsBlackLeft()
+{
+    //openLightFile();
+    if(Sensor(IN_2) < /*blackLeftVal) */450)//550)
+        return true;
+    else
+        return false;
+}
+
+/**
+ * @return bool Ob der rechte Lichtsensor schwarz sieht.
+ */
+bool IsBlackRight()
+{
+    //openLightFile();
+    if(Sensor(IN_1) < /*blackRightVal) */530)//600)
+        return true;
+    else
+        return false;
+}
+
+void InitSensors()
+{
+    SetSensorType(IN_1, SENSOR_TYPE_LIGHT_ACTIVE);
+    SetSensorType(IN_2, SENSOR_TYPE_LIGHT_ACTIVE);
+}
+
+void fahreVorwaertsAusFeld()
+{
+    GraphicOut(0, 0, "Down.ric");
+    //Lasse den Roboter 40cm aus dem Feld rausfahren.
+    RotateMotor(MOTOREN, 100, cm2deg(40));
+    moveStop();
+}
+
+void fahreRueckwaertsAusFeld()
+{
+    GraphicOut(0, 0, "Down.ric");
+    //Lasse den Roboter 40cm aus dem Feld rausfahren.
+    RotateMotor(MOTOREN, -100, cm2deg(40));
+    moveStop();
+}
+
+/**
+ * @brief Funktion für das Vorwärtsfahren.
+ */
+void fahre_1_vorwaerts()
+{
+    GraphicOut(0, 0, "Down.ric");
+    //Line-follow bis beide schwarz, 500ms Offset, 3. Parameter ungenutzt, seichter Kurvenausgleich
+    lineFollow("blackLine", 500, 0, 0);  
+    moveStop();
+}
+
+/**
+ * @brief Funktion für das rueckwaertsfahren.
+ */
+void fahre_1_rueckwaerts()
+{
+    GraphicOut(0, 0, "Up.ric");
+    
+	OnRev(MOTOREN, 100);
+    bool ende = false;
+    while(ende == false) {
+    
+        if(IsBlackLeft()) {
+            TextOut(0, LCD_LINE1, "links schwarz!");
+        } else {
+            TextOut(0, LCD_LINE1, "links weiß!");
+        }
+        
+        if(IsBlackRight()) {
+            TextOut(0, LCD_LINE2, "rechts schwarz!");
+        } else {
+            TextOut(0, LCD_LINE2, "rechts weiß!");
+        }
+
+        if (IsBlackLeft()) {
+            Off(MOTOREN);
+            OnRev(MOTOR_R, 50);
+            OnFwd(MOTOR_L, 100);
+            while (IsBlackLeft()) {
+                Wait(1);
+            }
+            Off(MOTOREN);
+            OnRev(MOTOREN, 100);
+        } 
+        if (IsBlackRight()) {
+            Off(MOTOREN);
+            OnRev(MOTOR_L, 50);
+            OnFwd(MOTOR_R, 100);
+            while (IsBlackRight()) {
+                Wait(1);
+            }
+            Off(MOTOREN);
+            OnRev(MOTOREN, 100);
+        }
+        
+        if(IsBlackRight() && IsBlackLeft())
+            //ende = true;
+        ClearScreen();
+    }
+    Off(MOTOREN);
+    
+    moveStop();
+}
+
+/**
+ * @brief Funktion für das drehen des Roboters nach links.
+ */
+void drehe_90_links()
+{
+    GraphicOut(0, 0, "Right.ric");
+    //Fahre erstmal ein kleines Stück vorwaerts
+    //RotateMotorEx(MOTOREN, 100, 1800, 0, 1, 1);
+    lineFollow("degrees", 400, 1800, 50); 
+    
+    //Beginne Drehung
+    OnFwd(MOTOR_R, 100);
+    OnRev(MOTOR_L, 100);
+    
+    //1,5 Sekunden offset.
+    Wait(1500);
+    while (!IsBlackLeft()) {
+        Wait(1);
+    }
+    PlayTone(500, 500);
+    while (IsBlackLeft()) {
+        Wait(1);
+    }
+    Off (MOTOREN);
+    PlayTone(500, 500);
+
+    OnRev(MOTOREN, 100);
+    Wait(500);
+    while(!(IsBlackLeft() && IsBlackRight())) {
+        if (IsBlackLeft()) {
+           //Off(MOTOR_L);
+        }
+    }
+    Off(MOTOREN);
+    //RotateMotor(MOTOREN, 100, 1500);
+    
+    moveStop();
+}
+
+/**
+ * Folgt einer Linie.
+ * @param string abortType Die Abbruchbedingung. Mögliche Werte:
+ * - "time" Bestimmte Zeit.
+ * - "degrees" Bestimmte Gradzahl.
+ * - "blackLine" Bis beide Sensoren schwarz sehen.
+ * @param unsigned int count Je nach abortType unterschiedliche Bedeutung.
+ * - abortType = "time": Zeit in Millisekunden.
+ * - abortType = "degrees": Gradzahl.
+ * - abortType = "blackLine": Nicht benutzt, einfach 0 uebergeben.
+ */
+void lineFollow(string abortType, unsigned int timeOffset, long count, byte motorTwoStrength)
+{
+    OnFwd(MOTOREN, 100);
+    
+    bool ende = false;
+    long startTime = CurrentTick();
+    long motorA = MotorRotationCount(MOTOR_L);
+    long motorB = MotorRotationCount(MOTOR_R);
+    motorTwoStrength = abs(motorTwoStrength);
+    
+    //Warte kurz, da beim Anfahren of schwarz erkannt wird. WICHTIG!!!
+    Wait(timeOffset + 100);
+    
+    while(ende == false) {
+        
+        if (IsBlackLeft()) {
+            Off(MOTOREN);
+            OnFwd(MOTOR_R, 100);
+            OnFwd(MOTOR_L, -motorTwoStrength);
+            while (IsBlackLeft()) {
+                if (startTime + count <= CurrentTick() && abortType == "time") {
+                    ende = true;
+                    break;
+                }
+                if (motorA + count <= MotorRotationCount(MOTOR_L) && motorB + count <= MotorRotationCount(MOTOR_R) && abortType == "degrees") {
+                    ende = true;
+                    break;
+                }
+                if (IsBlackRight() && IsBlackLeft() && abortType == "blackLine") {
+                    ende = true;
+                    break;
+                }
+            }
+            Off(MOTOREN);
+            OnFwd(MOTOREN, 100);
+        } 
+        if (IsBlackRight()) {
+            Off(MOTOREN);
+            OnFwd(MOTOR_L, 100);
+            OnFwd(MOTOR_R, -motorTwoStrength);
+            while (IsBlackRight()) {
+                if (startTime + count <= CurrentTick() && abortType == "time") {
+                    ende = true;
+                    break;
+                }
+                if (motorA + count <= MotorRotationCount(MOTOR_L) && motorB + count <= MotorRotationCount(MOTOR_R) && abortType == "degrees") {
+                    ende = true;
+                    break;
+                }
+                if (IsBlackRight() && IsBlackLeft() && abortType == "blackLine") {
+                    ende = true;
+                    break;
+                }
+            }
+            Off(MOTOREN);
+            OnFwd(MOTOREN, 100);
+        }
+        
+        if (startTime + count <= CurrentTick() && abortType == "time") {
+            ende = true;
+        }
+        if (motorA + count <= MotorRotationCount(MOTOR_L) && motorB + count <= MotorRotationCount(MOTOR_R) && abortType == "degrees") {
+            ende = true;
+        }
+        if (IsBlackRight() && IsBlackLeft() && abortType == "blackLine") {
+            ende = true;
+        }
+    }
+    Off(MOTOREN);
+}
+
+/**
+ * @brief Funktion für das drehen des Roboters nach rechts.
+ */
+void drehe_90_rechts()
+{
+    GraphicOut(0, 0, "Left.ric");
+    //Fahre erstmal ein kleines Stück vorwaerts
+    //RotateMotorEx(MOTOREN, 100, 1800, 0, 1, 1);
+    lineFollow("degrees", 400, 1800, 50); 
+    
+    //Beginne Drehung
+    OnFwd(MOTOR_L, 100);
+    OnRev(MOTOR_R, 100);
+    
+    //1,5 Sekunden offset.
+    Wait(1500);
+    while (!IsBlackRight()) {
+        Wait(1);
+    }
+    PlayTone(500, 500);
+    while (IsBlackRight()) {
+        Wait(1);
+    }
+    Off (MOTOREN);
+    PlayTone(500, 500);
+
+    OnRev(MOTOREN, 100);
+    Wait(500);
+    while(!(IsBlackLeft() && IsBlackRight())) {
+        if (IsBlackRight()) {
+           //Off(MOTOR_R);
+        }
+    }
+    Off(MOTOREN);
+    //RotateMotor(MOTOREN, 100, 1500);
+    
+    moveStop();
+}
+
+void moveStop()
+{
+    PlayToneEx(500, 500, 4, false);
+}

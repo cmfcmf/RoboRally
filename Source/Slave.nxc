@@ -1,0 +1,169 @@
+/**
+ * @file Slave.nxc
+ */
+
+bool LOGGING = false;
+
+#include "Logging.nxc"
+#include "Global.h"
+#include "Bluetooth.h"
+#include "Bluetooth.nxc"
+#include "Bewegung.nxc"
+
+// Lade Bilder auf NXT.
+#download "Zzzz.ric"
+#download "Down.ric"
+#download "Left.ric"
+#download "Right.ric"
+#download "Up.ric"
+
+bool isBlinking = false;
+bool isPieping = false;
+
+Tone totTones[] = {
+    TONE_F4, 1000, 
+    TONE_E4, 700, 
+    TONE_DS4, 700,
+    TONE_D4, 1500
+};
+
+Tone checkpointTones[] = {
+    TONE_F4, 300,
+    TONE_G4, 300,
+    TONE_A4, 300,
+    TONE_B4, 300,
+    TONE_C5, 300,
+};
+
+/**
+ * Laest Lichtsensoren und Display blinken.
+ */
+task blink()
+{
+    while(1) {
+        SetSensorType(IN_1, SENSOR_TYPE_LIGHT_ACTIVE);
+        SetSensorType(IN_2, SENSOR_TYPE_LIGHT_INACTIVE);
+        RectOut(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, DRAW_OPT_FILL_SHAPE);
+        Wait(500);
+        SetSensorType(IN_2, SENSOR_TYPE_LIGHT_ACTIVE);
+        SetSensorType(IN_1, SENSOR_TYPE_LIGHT_INACTIVE);
+        ClearScreen();
+        Wait(500);
+    }
+}
+
+/**
+ * Laest Roboter piepen
+ */
+task piepen()
+{
+    while(1) {
+        PlayTone(TONE_C5, 500);
+        Wait(1000);
+    }
+}
+
+/**
+ * @brief Main Task
+ */
+task main()
+{
+    InitSensors();
+	while(1)
+	{
+		int in, out;
+		ReceiveRemoteNumber(SLAVE_INBOX, true, in);
+		switch(in)
+		{
+		case BLUETOOTH_NACH_VORNE:
+            ClearScreen();
+			fahre_1_vorwaerts();
+			SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+			ClearScreen();
+			break;
+		case BLUETOOTH_NACH_LINKS:
+		    ClearScreen();
+			drehe_90_links();
+			SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+			ClearScreen();
+			break;
+		case BLUETOOTH_NACH_RECHTS:
+		    ClearScreen();
+			drehe_90_rechts();
+			SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+			ClearScreen();
+			break;
+		case BLUETOOTH_NACH_HINTEN:
+		    ClearScreen();
+			fahre_1_rueckwaerts();
+			SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+			ClearScreen();
+			break;
+		case BLUETOOTH_WENDE:
+            ClearScreen();
+			drehe_90_links();
+			drehe_90_links();
+			SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+			ClearScreen();
+			break;
+		case BLUETOOTH_NACH_VORNE_AUS_FELD:
+		    ClearScreen();
+			fahreVorwaertsAusFeld();
+			SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+			ClearScreen();
+		    break;
+		case BLUETOOTH_NACH_HINTEN_AUS_FELD:
+		    ClearScreen();
+			fahreRueckwaertsAusFeld();
+			SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+			ClearScreen();
+			break;
+		case BLUETOOTH_TOT:
+            ClearScreen();
+            Wait(500);
+			PlayTones(totTones);
+			SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+			ClearScreen();
+			break;
+		case BLUETOOTH_CHECKPOINT:
+		    ClearScreen();
+            Wait(500);
+			PlayTones(checkpointTones);
+			SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+			ClearScreen();
+		case BLUETOOTH_BLINK:
+		    StartTask(blink);
+		    isBlinking = true;
+		    SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+		    break;
+		case BLUETOOTH_BLINK_STOP:
+		    StopTask(blink);
+		    isBlinking = false;
+            SetSensorType(IN_2, SENSOR_TYPE_LIGHT_ACTIVE);
+            SetSensorType(IN_1, SENSOR_TYPE_LIGHT_ACTIVE);
+            ClearScreen();
+            SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+            break;   
+        case BLUETOOTH_PIEPEN:
+            StartTask(piepen);
+		    isPieping = true;
+		    SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+            break;
+        case BLUETOOTH_PIEPEN_STOP:
+            StopTask(piepen);
+		    isPieping = false;
+            SendResponseBool(SLAVE_OUTBOX , BLUETOOTH_SUCCESS);
+            break;
+        case BLUETOOTH_GET_BATTERY_LEVEL:
+            int batteryLevel = BatteryLevel();
+            SendResponseNumber(SLAVE_OUTBOX, batteryLevel);
+            break;
+		default:
+		    if (!isBlinking) {
+                GraphicOut(0, 0, "Zzzz.ric");
+            }
+			break;
+		}
+	}
+
+}

@@ -1,0 +1,352 @@
+/**
+ * @file Spielfeld.nxc
+ */
+
+/**
+ * @brief Liest ein Spielfeld ein und speichert es in der Variable "spielfeld".
+ * @param string spielfeldName Der Name des Spielfelds das geoeffnet werden soll (z.B.: test.txt)
+ * @return bool True bei Erfolg, false bei Scheitern
+ * @see spielfeld
+ */
+unsigned int SpielfeldEinlesen(string spielfeldName)
+{
+	byte spielfeldHandle;
+
+	string zeile;
+	string spalte;
+	unsigned int groesse;
+	unsigned int errorCode;
+	
+	///Oeffnet die Spielfelddatei. Ich bin nicht ganz sicher, ob das so wirklich funktioniert.
+	errorCode = OpenFileRead(spielfeldName, groesse, spielfeldHandle);
+	if(errorCode != LDR_SUCCESS) //Fehler zurueckgeben, wenn Datei nicht geoeffnet werden konnte.
+		return errorCode;
+	
+	TextOut(0, LCD_LINE1, spielfeldName, true);
+	TextOut(0, LCD_LINE2, "================", false);
+	
+	//In groesse steht die Anzahl von Zeichen im Spielfeld
+	//NumOut(0, 0, groesse, true);
+	//Wait(3000);
+
+	/*
+	Das Spielfeld ist folgendermassen abgespeichert:
+
+	x-Laenge
+	y-Laenge
+	x1y1;x2y1;x3y1
+	x1y2;x2y2;x3y2
+	x1y3;x2y3;x3y3
+	*/
+	
+	//Lese x-Laenge des Spielfelds ein (1. Zeile) und schreibe es in die Variable "zeile"
+	ReadLnString(spielfeldHandle, zeile);
+	spielfeld_x = StrToNum(zeile); //Konvertiere x-Laenge in int
+	NumOut(0, LCD_LINE3, spielfeld_x, false);
+	
+	//Lese y-Laenge des Spielfelds ein (2. Zeile)
+	ReadLnString(spielfeldHandle, zeile);
+	spielfeld_y = StrToNum(zeile); //Konvertiere y-Laenge in int
+	NumOut(0, LCD_LINE4, spielfeld_y, false);
+	
+	//Speichere einzelne Felder im spielfeld Array
+	for (byte y = 0; y < spielfeld_y; y++)
+	{
+		ReadLnString(spielfeldHandle, zeile); //Lese eine Zeile ein, z.B.: 0110000000000000;0111000000000000;0000111100000000
+		for(byte x = 0; x < spielfeld_x; x++)
+		{
+			spalte = SubStr(zeile, 17 * x, 16); //Lese ein Feld, z.B.: 0011001011000000
+			
+			for(byte i = 0; i < 16; i++)
+				if(SubStr(spalte, i, 1) == "1")
+					spielfeld[GET_ARRAY_INDEX(x, y)] |= (StrToNum(SubStr(spalte, i, 1)) << (15 - i));
+
+			TextOut(0, LCD_LINE5, spalte, false);
+			//NumOut(0, LCD_LINE6, spielfeld[GET_ARRAY_INDEX(x, y)], false);
+			//Wait(100);
+		}
+	}
+	CloseFile(spielfeldHandle);
+	
+	return true; //Alles ok.
+}
+
+
+/**
+ * @brief Prueft ob Koordinaten vorhanden
+ * @param unsigned int x Position x
+ * @param unsigned int y Position y
+ * @return bool True Wenn ok, False Wenn ausserhalb
+ */
+bool KoordinatenOk(int x, int y)
+{
+	if(x < 0 || y < 0 || x > spielfeld_x-1 || y > spielfeld_y-1)
+		return false;
+	return true;
+}
+
+/**
+ * @name Prueffunktionen fuer Bodentyp
+ * @{
+ */
+ 
+/**
+ * @brief Gibt den Bodentyp eines Feldes zurueck
+ * @param byte x Die x-Koordinate des Feldes
+ * @param byte y Die y-Koordinate des Feldes
+ * @return char Der Feldtyp, -1 bei Fehler
+ *
+ * @see Feldtypen
+ */
+char Boden(byte x, byte y)
+{
+	if(KoordinatenOk(x, y))
+		return spielfeld[GET_ARRAY_INDEX(x, y)] >> 12;
+	else
+		return -1;
+}
+
+/**@}*/
+
+/**
+ * @name Prueffunktionen fuer Mauern
+ * @{
+ */
+ 
+/**
+ * @brief Prueft ob sich oben vom Feld eine Mauer befindet
+ * @param byte x Die x-Koordinate des Feldes
+ * @param byte y Die y-Koordinate des Feldes
+ * @return char True: Mauer False: Keine Mauer -1: Fehler
+ */
+char MauerNorden(byte x, byte y)
+{
+	if(KoordinatenOk(x, y))
+		return (spielfeld[GET_ARRAY_INDEX(x, y)] >> 11) & 1;
+	else
+		return -1;
+		
+}
+
+/**
+ * @brief Prueft ob sich rechts vom Feld eine Mauer befindet
+ * @param byte x Die x-Koordinate des Feldes
+ * @param byte y Die y-Koordinate des Feldes
+ * @return char True: Mauer False: Keine Mauer -1: Fehler
+ */
+char MauerOsten(byte x, byte y)
+{
+	if(KoordinatenOk(x, y))
+		return (spielfeld[GET_ARRAY_INDEX(x, y)] >> 10) & 1;
+	else
+		return -1;
+}
+
+/**
+
+ * @brief Prueft ob sich unten vom Feld eine Mauer befindet
+ * @param byte x Die x-Koordinate des Feldes
+ * @param byte y Die y-Koordinate des Feldes
+
+ * @return char True: Mauer False: Keine Mauer, -1: Fehler
+ */
+char MauerSueden(byte x, byte y)
+{
+	if(KoordinatenOk(x, y))
+		return (spielfeld[GET_ARRAY_INDEX(x, y)] >> 9) & 1;
+	else
+		return -1;
+}
+
+/**
+ * @brief Prueft ob sich links vom Feld eine Mauer befindet
+ * @param byte x Die x-Koordinate des Feldes
+ * @param byte y Die y-Koordinate des Feldes
+ * @return char True: Mauer False: Keine Mauer, -1: Fehler
+ */
+char MauerWesten(byte x, byte y)
+{
+	if(KoordinatenOk(x, y))
+		return (spielfeld[GET_ARRAY_INDEX(x, y)] >> 8) & 1;
+	else
+		return -1;
+}
+
+/**@}*/
+
+/**
+ * @name Prueffunktionen fuer Laser
+ * @{
+ */
+
+/**
+ * @brief Prueft ob sich auf dem Feld ein von oben kommender Laser befindet
+ * @param byte x Die x-Koordinate des Feldes
+ * @param byte y Die y-Koordinate des Feldes
+ * @return char True: Laser False: Kein Laser -1: Fehler
+ */
+char LaserNorden(byte x, byte y)
+{
+	if(KoordinatenOk(x, y))
+		return (spielfeld[GET_ARRAY_INDEX(x, y)] >> 7) & 1;
+	else
+		return -1;
+}
+
+/**
+ * @brief Prueft ob sich auf dem Feld ein von rechts kommender Laser befindet
+ * @param byte x Die x-Koordinate des Feldes
+ * @param byte y Die y-Koordinate des Feldes
+ * @return char True: Laser False: Kein Laser -1: Fehler
+ */
+char LaserOsten(byte x, byte y)
+{
+	if(KoordinatenOk(x, y))
+		return (spielfeld[GET_ARRAY_INDEX(x, y)] >> 6) & 1;
+	else
+		return -1;
+}
+
+/**
+ * @brief Prueft ob sich auf dem Feld ein von unten kommender Laser befindet
+ * @param byte x Die x-Koordinate des Feldes
+ * @param byte y Die y-Koordinate des Feldes
+ * @return char True: Laser False: Kein Laser -1: Fehler
+ */
+char LaserSueden(byte x, byte y)
+{
+	if(KoordinatenOk(x, y))
+		return (spielfeld[GET_ARRAY_INDEX(x, y)] >> 5) & 1;
+	else
+		return -1;
+}
+
+/**
+ * @brief Prueft ob sich auf dem Feld ein von links kommender Laser befindet
+ * @param byte x Die x-Koordinate des Feldes
+ * @param byte y Die y-Koordinate des Feldes
+ * @return char True: Laser False: Kein Laser -1: Fehler
+ */
+char LaserWesten(byte x, byte y)
+{
+	if(KoordinatenOk(x, y))
+		return (spielfeld[GET_ARRAY_INDEX(x, y)] >> 4) & 1;
+	else
+		return -1;
+}
+
+/**
+ * @brief Gibt das Startfeld eines Roboters zurueck
+ * @param byte r Roboternummer
+ * @param byte &x Die X-Position
+ * @param byte &y Die Y-Position
+ * @return bool True: Startfeld gefunden, False: Startfeld nicht vorhanden
+ */
+bool RoboterStartFeld(byte r, byte &robostart_x, byte &robostart_y)
+{
+	for(byte y = 0; y < spielfeld_y; y++)
+	{
+		for(byte x = 0; x < spielfeld_x; x++)
+		{
+			if(Boden(x, y) == FELDTYP_ROBOSTART(r))
+			{
+				robostart_x = x;
+				robostart_y = y;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * @brief Gibt den gesamten Aufbau des Spielfelds auf dem LCD aus.
+ * @param short zeit Die Zeit in ms, nach der das naechste Feld ausgegeben werden soll. Bei 0 wird auf das Druecken vom orangen Knopf gewartet.
+ * @deprecated
+ */
+void SpielfeldAusgeben(short zeit)
+{
+	ClearScreen();
+	for(byte y = 0; y < spielfeld_y; y++)
+	{
+		for(byte x = 0; x < spielfeld_x; x++)
+		{
+			//Koordinaten ausgeben
+			NumOut(0, LCD_LINE1, x, false);
+			NumOut(49, LCD_LINE1, y, false);
+
+			//Feldtyp ausgeben
+			string typ;
+			switch(Boden(x, y))
+			{
+			case FELDTYP_BODEN:
+				typ = "Boden";
+				break;
+			case FELDTYP_LOCH:
+				typ = "Loch";
+				break;
+			case FELDTYP_CHECKPOINT:
+				typ = "Checkpoint";
+				break;
+			case FELDTYP_REPERATURPUNKT:
+				typ = "Reperaturpunkt";
+				break;
+			case FELDTYP_FLIESSBAND_RECHTS:
+				typ = "Fliess. rechts";
+				break;
+			case FELDTYP_FLIESSBAND_LINKS:
+				typ = "Fliess. links";
+				break;
+			case FELDTYP_FLIESSBAND_OBEN:
+				typ = "Fliess. oben";
+				break;
+			case FELDTYP_FLIESSBAND_UNTEN:
+				typ = "Fliess. unten";
+				break;
+			default:
+				typ = "Unbk. Typ";
+				break;
+			}
+			TextOut(0, LCD_LINE2, typ, false);
+			
+			//Mauern ausgeben
+			TextOut(0, LCD_LINE3, "     Mauern     ", false);
+			if(MauerNorden(x, y))
+				TextOut(0, LCD_LINE4, "oben", false);
+			if(MauerSueden(x, y))
+				TextOut(49, LCD_LINE4, "unten", false);
+			if(MauerOsten(x, y))
+				TextOut(0, LCD_LINE5, "rechts", false);
+			if(MauerWesten(x, y))
+				TextOut(49, LCD_LINE5, "links", false);
+			
+			//Laser ausgeben
+			TextOut(0, LCD_LINE6, "     Laser      ", false);
+			if(LaserNorden(x, y))
+				TextOut(0, LCD_LINE7, "oben", false);
+			if(LaserSueden(x, y))
+				TextOut(49, LCD_LINE7, "unten", false);
+			if(LaserOsten(x, y))
+				TextOut(0, LCD_LINE8, "rechts", false);
+			if(LaserWesten(x, y))
+				TextOut(49, LCD_LINE8, "links", false);
+			
+			if(zeit == 0)
+			{
+				//Warte bis oranger Knopf gedrueckt
+				while(ButtonState(BTNCENTER) == false)
+					Wait(1);
+				Wait(300);
+				while(ButtonState(BTNCENTER) == true)
+					Wait(1);
+			}
+			else
+				Wait(zeit);
+			
+			ClearScreen();
+		}
+	}
+	ClearScreen();
+}
+
+/**@}*/

@@ -1,0 +1,28 @@
+//Inboxes
+#define USB_INBOX 1
+#define USB_OUTBOX 0
+
+/**
+ * @brief Sendet einen String via USB.
+ */
+void USBSend(string message) {
+    SendMessage(USB_OUTBOX, message);
+}
+
+string USBReceive() {
+    string message = "";
+    ReceiveMessage(USB_INBOX, true, message);
+    return message;
+}
+
+bool USBMsgAvailable() {
+    string message = "";
+    ReceiveMessage(USB_INBOX, false, message);
+    return (message == "") ? false : true;
+}
+
+bool USBIsConnected() {
+    byte usbState = 0;
+    usbState = UsbState();
+    return usbState != 0;
+}

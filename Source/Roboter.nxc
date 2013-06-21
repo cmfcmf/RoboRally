@@ -1,0 +1,446 @@
+/**
+ * @file Roboter.nxc
+ * @brief Routinen zur direkten Steuerung eines Roboters.
+ */
+
+/**
+ * @brief Array fuer alle Roboter.
+ * Hier werden alle Informationen ueber jeden Roboter zentral auf dem Master gespeichert.
+ * @see roboter
+ */
+roboter robo[ANZAHL_ROBOTER];
+
+/**
+ * @brief Gibt die Karte eines Roboters eines Zuges zurueck.
+ * @param byte r Roboternummer
+ * @param byte zug Zugnummmer
+ */
+byte RoboBefehl(byte r, byte zug)
+{
+	return robo[r].karten[zug] / 1000;
+}
+
+/**
+ * @brief Gibt die Kartennummer eines Roboters eines Zuges zurueck.
+ * @param byte r Roboternummer
+ * @param byte zug Zugnummmer
+ */
+int RoboKartennummer(byte r, byte zug)
+{
+	return robo[r].karten[zug] % 1000;
+}
+
+/**
+ * @brief Resettet das Roboter Array zu Beginn eines Spiels.
+ * @todo "pause" auf false setzen!
+ */
+void ResetRoboArray(void)
+{
+	for(byte r = 0; r < ANZAHL_ROBOTER; r++)
+	{
+		robo[r].leben = ANZAHL_LEBEN;
+		robo[r].schaden = ANZAHL_SCHADEN;
+		RoboSetAusrichtung(r, AUSRICHTUNG_NORD);
+		RoboSetKanal(r, r + 1); ///@todo Kanal richtig einstellen lassen.
+		RoboSetZug(r, 0);
+		RoboSetPause(r, false);
+		byte x, y;
+		//TODO!!
+		if(RoboterStartFeld(r, x, y))
+		{
+			RoboSetPosition(r, x, y);
+			RoboSetCheckpoint(r, x, y, AUSRICHTUNG_NORD);
+		}
+		else
+		{
+			LCD_Out("Startfeld fuer Roboter " + NumToStr(r) + " konnte nicht gefunden werden!", 5000);
+			Stop(true);
+		}
+	}
+}
+
+/**
+ * @brief Setzt den aktuellen Zug eines Roboters.
+ * @param byte r Roboternummer
+ * @param byte zug Zugnummmer
+ */
+void RoboSetZug(byte r, byte zug)
+{
+	robo[r].zug = zug;
+}
+
+/**
+ * @brief Fragt den aktuellen Zug eines Roboters ab.
+ * @param byte r Roboternummer
+ * @return byte zug Zugnummmer
+ */
+byte RoboGetZug(byte r)
+{
+	return robo[r].zug;
+}
+
+/**
+ * @brief Setzt die aktuelle Position eines Roboters.
+ * @param byte r Roboternummer
+ * @param byte x Position x
+ * @param byte y Position y
+ */
+void RoboSetPosition(byte r, byte x, byte y)
+{
+	robo[r].position_x = x;
+	robo[r].position_y = y;
+}
+
+/**
+ * @brief Fragt die aktuelle Position eines Roboters ab.
+ * @param byte r Roboternummer
+ * @param byte x Position x
+ * @param byte y Position y
+ */
+void RoboGetPosition(byte r, byte &x, byte &y)
+{
+	x = robo[r].position_x;
+	y = robo[r].position_y;
+}
+
+/**
+ * @brief Setzt den Checkpoint eines Roboters.
+ * @param byte r Roboternummer
+ * @param byte x Position x
+ * @param byte y Position y
+ * @param byte ausrichtung Die Ausrichtung am Checkpoint.
+ */
+void RoboSetCheckpoint(byte r, byte x, byte y, byte ausrichtung)
+{
+	robo[r].checkpoint_x = x;
+	robo[r].checkpoint_y = y;
+    robo[r].checkpoint_ausrichtung = ausrichtung;
+}
+
+/**
+ * @brief Fragt die Position des letzten Checkpoints eines Roboters ab.
+ * @param byte r Roboternummer
+ * @param byte &x Position x
+ * @param byte &y Position y
+ * @param byte &ausrichtung Die Ausrichtung am Checkpoint.
+ */
+void RoboGetCheckpoint(byte r, byte &x, byte &y, byte &ausrichtung)
+{
+	x = robo[r].checkpoint_x;
+	y = robo[r].checkpoint_y;
+	ausrichtung = robo[r].checkpoint_ausrichtung;
+}
+
+/**
+ * @brief Setzt den Kanal eines Roboters.
+ * @param byte r Roboternummer
+ * @param byte zug Kanalnummer
+ */
+void RoboSetKanal(byte r, byte kanal)
+{
+	robo[r].kanal = kanal;
+}
+
+/**
+ * @brief Fragt den Kanal eines Roboters ab.
+ * @param byte r Roboternummer
+ * @return byte Kanalnummer
+ */
+byte RoboGetKanal(byte r)
+{
+	return robo[r].kanal;
+}
+
+/**
+ * @brief Setzt die Ausrichtung eines Roboters.
+ * @param byte r Roboternummer
+ * @param byte Ausrichtung
+ */
+void RoboSetAusrichtung(byte r, byte ausrichtung)
+{
+	robo[r].ausrichtung = ausrichtung;
+}
+
+/**
+ * @brief Fragt die Ausrichtung eines Roboters ab.
+ * @param byte r Roboternummer
+ * @return byte Ausrichtung
+ */
+byte RoboGetAusrichtung(byte r)
+{
+	return robo[r].ausrichtung;
+}
+
+/**
+ * @brief Fragt die hintere Ausrichtung eines Roboters ab.
+ * @param byte r Roboternummer
+ * @return byte Ausrichtung
+ */
+byte RoboGetAusrichtungHinten(byte r)
+{
+	byte tmp = robo[r].ausrichtung;
+	
+	for(byte i = 0; i < 2; i++)
+	{
+		tmp--;
+		if(tmp == 0)
+			tmp = 4;
+	}
+	
+	return tmp;
+}
+
+string Ausrichtung2String(byte ausrichtung)
+{
+    switch(ausrichtung) {
+    case AUSRICHTUNG_NORD:
+        return "Norden";
+    case AUSRICHTUNG_SUED:
+        return "Sueden";
+    case AUSRICHTUNG_OST:
+        return "Osten";
+    case AUSRICHTUNG_WEST:
+        return "Westen";
+    }
+}
+
+/**
+ * @brief Setzt die Leben eines Roboters.
+ * @param byte r Roboternummer
+ * @param byte leben Leben
+ */
+void RoboSetLeben(byte r, byte leben)
+{
+	robo[r].leben = leben;
+}
+
+/**
+ * @brief Fragt die Leben eines Roboters ab.
+ * @param byte r Roboternummer
+ * @return byte Leben
+ */
+byte RoboGetLeben(byte r)
+{
+	return robo[r].leben;
+}
+
+/**
+ * @brief Prueft ob ein Roboter noch Leben hat.
+ * @param byte r Roboternummer
+ * @return bool True: ja False: nein
+ */
+bool RoboLebt(byte r)
+{
+	return RoboGetLeben(r);
+}
+
+/**
+ * @brief Setzt einen Roboter in den Pause Modus: Keine Bewegung bis zum Ende einer Runde.
+ * @param byte r Roboternummer
+ * @param bool pause Roboter in Pause Modus?
+ */
+void RoboSetPause(byte r, bool pause)
+{
+	robo[r].pause = pause;
+}
+
+/**
+ * @brief Prueft, ob sich ein Roboter im Pause Modus befindet.
+ * @param byte r Roboternummer
+ * @return bool Roboter in Pause Modus?
+ */
+byte RoboGetPause(byte r)
+{
+	return robo[r].pause;
+}
+
+/**
+ * @brief Erweckt alle Roboter aus dem Pause Modus.
+ */
+void ErweckeRoboterAusPause()
+{
+    for(byte r = 0; r < ANZAHL_ROBOTER; r++) {
+        RoboSetPause(r, false);
+    }
+}
+
+/**
+ * @brief Fragt ab, ob auf einem Feld ein Roboter steht
+ * @param byte x Position x
+ * @param byte y Position y
+ * @return char -1 Wenn kein Roboter, sonst Roboternummer (0 bis #ANZAHL_ROBOTER - 1)
+ */
+char RoboAufFeld(byte x, byte y)
+{
+	byte crashroboter_x, crashroboter_y;
+	for(byte r = 0; r < ANZAHL_ROBOTER; r++)
+	{
+		RoboGetPosition(r, crashroboter_x, crashroboter_y);
+		if(x == crashroboter_x && y == crashroboter_y)
+			return r;
+	}
+	return -1;
+}
+
+
+/**
+ * @brief Dreht einen Roboter im Array um eins nach links
+ * @param byte r Roboternummer
+ * @note Es wird nur auf dem Master intern die Ausrichtung veraendert.
+ */
+void RoboAusrichtungUmEinsNachLinks(byte r)
+{
+	robo[r].ausrichtung--;
+	if(robo[r].ausrichtung == 0)
+		robo[r].ausrichtung = 4;
+}
+
+/**
+ * @brief Dreht einen Roboter im Array um eins nach rechts
+ * @param byte r Roboternummer
+ * @note Es wird nur auf dem Master intern die Ausrichtung veraendert.
+ */
+void RoboAusrichtungUmEinsNachRechts(byte r)
+{
+	robo[r].ausrichtung++;
+	if(robo[r].ausrichtung == 5)
+		robo[r].ausrichtung = 1;
+}
+
+/**
+ * @brief Versucht einen Roboter im internen Array um eins nach vorne zu bewegen
+ * @param byte r Roboternummer
+ * @return char 
+ *		-1 bei Erfolg, 
+ *		-2 wenn nicht moeglich (wegen Mauer),
+ *		-3 wenn nicht moeglich (außerhalb des Spielfelds),
+ *		Roboternummer (0 bis #ANZAHL_ROBOTER - 1) wenn nicht moeglich (anderer Roboter)
+ * @note Es wird nur auf dem Master intern die Position veraendert.
+ */
+char RoboPositionUmEinsNachVorne(byte r)
+{
+	s16 x_neu, y_neu, x_jetzt, y_jetzt;
+	
+	//Lese aktuelle Position ein
+	RoboGetPosition(r, x_jetzt, y_jetzt);
+
+	//Errechne neues Feld und pruefe ob Mauer im Weg
+	switch(RoboGetAusrichtung(r))
+	{
+	case AUSRICHTUNG_NORD:
+		x_neu = x_jetzt;
+		y_neu = y_jetzt + 1;
+		if(MauerNorden(x_jetzt, y_jetzt) || (MauerSueden(x_neu, y_neu) && KoordinatenOk(x_neu, y_neu)))
+			return -2;
+		break;
+	case AUSRICHTUNG_OST:
+		x_neu = x_jetzt + 1;
+		y_neu = y_jetzt;
+		if(MauerOsten(x_jetzt, y_jetzt) || (MauerWesten(x_neu, y_neu) && KoordinatenOk(x_neu, y_neu)))
+			return -2;
+		break;
+	case AUSRICHTUNG_SUED:
+		x_neu = x_jetzt;
+		y_neu = y_jetzt - 1;
+		if(MauerSueden(x_jetzt, y_jetzt) || (MauerNorden(x_neu, y_neu) && KoordinatenOk(x_neu, y_neu)))
+			return -2;
+		break;
+	case AUSRICHTUNG_WEST:
+		x_neu = x_jetzt - 1;
+		y_neu = y_jetzt;
+		if(MauerWesten(x_jetzt, y_jetzt) || (MauerOsten(x_neu, y_neu) && KoordinatenOk(x_neu, y_neu)))
+			return -2;
+		break;
+	}
+
+	//Pruefe ob ausserhalb des Spielfeldes
+	if(!KoordinatenOk(x_neu, y_neu))
+		return -3;
+
+	//Pruefe ob auf dem neuen Feld ein anderer Roboter steht
+	char crashroboter = RoboAufFeld(x_neu, y_neu);
+	if(crashroboter >= 0)
+		return crashroboter;
+	
+	RoboSetPosition(r, x_neu, y_neu);
+	
+	return -1;
+}
+
+/**
+ * @brief Versucht einen Roboter im internen Array um eins nach hinten zu bewegen
+ * @param byte r Roboternummer
+ * @return char 
+ *		-1 bei Erfolg, 
+ *		-2 wenn nicht moeglich (wegen Mauer),
+ *		-3 wenn nicht moeglich (außerhalb des Spielfelds),
+ *		Roboternummer (0 bis #ANZAHL_ROBOTER - 1) wenn nicht moeglich (anderer Roboter)
+ * @note Es wird nur auf dem Master intern die Position veraendert.
+ */
+char RoboPositionUmEinsNachHinten(byte r)
+{
+	s16 x_neu, y_neu, x_jetzt, y_jetzt;
+	
+	//Lese aktuelle Position ein
+	RoboGetPosition(r, x_jetzt, y_jetzt);
+
+	//Errechne neues Feld und pruefe ob Mauer im Weg
+	switch(RoboGetAusrichtung(r))
+	{
+	case AUSRICHTUNG_SUED:
+		x_neu = x_jetzt;
+		y_neu = y_jetzt + 1;
+		if(MauerNorden(x_jetzt, y_jetzt) || (MauerSueden(x_neu, y_neu) && KoordinatenOk(x_neu, y_neu)))
+			return -2;
+		break;
+	case AUSRICHTUNG_WEST:
+		x_neu = x_jetzt + 1;
+		y_neu = y_jetzt;
+		if(MauerOsten(x_jetzt, y_jetzt) || (MauerWesten(x_neu, y_neu) && KoordinatenOk(x_neu, y_neu)))
+			return -2;
+		break;
+	case AUSRICHTUNG_NORD:
+		x_neu = x_jetzt;
+		y_neu = y_jetzt - 1;
+		if(MauerSueden(x_jetzt, y_jetzt) || (MauerNorden(x_neu, y_neu) && KoordinatenOk(x_neu, y_neu)))
+			return -2;
+		break;
+	case AUSRICHTUNG_OST:
+		x_neu = x_jetzt - 1;
+		y_neu = y_jetzt;
+		if(MauerWesten(x_jetzt, y_jetzt) || (MauerOsten(x_neu, y_neu) && KoordinatenOk(x_neu, y_neu)))
+			return -2;
+		break;
+	}
+
+	//Pruefe ob ausserhalb des Spielfeldes
+	if(!KoordinatenOk(x_neu, y_neu))
+		return -3;
+	
+	//Pruefe ob auf dem neuen Feld ein anderer Roboter steht
+	char crashroboter = RoboAufFeld(x_neu, y_neu);
+	if(crashroboter >= 0)
+		return crashroboter;
+	
+	RoboSetPosition(r, x_neu, y_neu);
+
+	return -1;
+}
+
+/**
+ * @brief Dreht einen Roboter in die angegebene Richtung.
+ * @param byte r Die Roboternummer.
+ * @param byte zielrichtung Die Richtung in die gedreht werden soll.
+ * @todo Roboter intelligent drehen!
+ */
+void DreheRoboterInRichtung(byte r, byte zielrichtung)
+{
+	byte ausrichtung = RoboGetAusrichtung(r);
+
+	while(ausrichtung != zielrichtung)
+	{
+	//	RoboAusrichtungUmEinsNachLinks(r);
+	   DreheRoboterNachLinks(r);
+  		ausrichtung = RoboGetAusrichtung(r);
+	}
+}

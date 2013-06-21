@@ -1,0 +1,358 @@
+/**
+ * @file Bluetooth.nxc
+ */
+
+/**
+ * @brief Array zum Speichern der gerade verbundenen NXT-Namen.
+ */
+string connectedNXTNames[3] = {"", "", ""};
+
+/**
+ * @brief Funktion zum senden eines Befehls via Bluetooth an einen Roboter.
+ * @param byte kanal Der Kanal des Slaves.
+ * @param int befehl Die Nachricht / der Befehl zum senden.
+ *
+ * Zuerst wird der befehl an den angegebenen Kanal gesendet. Danach wird gewartet,
+ * bis der Slave #BLUETOOTH_SUCCESS (bool) zuruecksendet.
+ *
+ * @warning Wenn der Slave nicht antwortet, bleibt das Programm hier haengen!
+ * @todo Timeout einbauen.
+ * @todo Mailboxen Global machen!
+ * @note Wenn #KEINE_ECHTEN_ROBOTER definiert ist, wird diese Funktion sofort beendet.
+ */ 
+void BluetoothBefehlSenden(byte kanal, int befehl)
+{
+	#ifndef KEINE_ECHTEN_ROBOTER
+	//RemoteKeepAlive(kanal); //Verhindere die automatische Abschaltung des Slaves
+
+    BTWait(kanal);
+	SendRemoteNumber(kanal, MASTER_OUTBOX, befehl);
+	BTWait(kanal);
+	
+	bool in;
+	char success = STAT_MSG_EMPTY_MAILBOX;
+	while(success != NO_ERR) {
+	    BTWait(kanal);
+		success = ReceiveRemoteBool(MASTER_INBOX, true, in);
+		BTWait(kanal);
+	}
+	#endif
+}
+
+int BluetoothGetBatteryLevel(byte kanal)
+{
+    int in = 0;
+    char success = STAT_MSG_EMPTY_MAILBOX;
+    #ifndef KEINE_ECHTEN_ROBOTER
+    BTWait(kanal);
+    SendRemoteNumber(kanal, MASTER_OUTBOX, BLUETOOTH_GET_BATTERY_LEVEL); 
+    BTWait(kanal);
+    
+	while(success != NO_ERR) {
+	    BTWait(kanal);
+		success = ReceiveRemoteNumber(MASTER_INBOX, true, in);
+		BTWait(kanal);
+	}
+	#endif
+	return in;
+}
+
+void TextOutML(byte x, byte y, string text)
+{
+	byte laenge = StrLen(text);
+	for(byte i = 0; i < (laenge / 16)+0.5; i++) {
+	    ClearLine((56 - (56 - y) ) - 8 * i);
+		TextOut(x, (56 - (56 - y) ) - 8 * i, SubStr(text, i * 16, 16 + 1), false);
+	}
+}
+
+void BTWait (byte channel){  //wait until BT is idle
+    long startTick = CurrentTick();
+    while(BluetoothStatus(channel)!=NO_ERR || RemoteConnectionIdle(channel)==false) {
+        if(CurrentTick() - startTick > 1000) {
+            // If there is no response for more than a second
+            TextOut(0, LCD_LINE1, "Bluetooth ERROR!", DRAW_OPT_CLEAR_EOL);
+            TextOut(0, LCD_LINE2, FormatNum("Verbindung %d", channel), DRAW_OPT_CLEAR_EOL);
+            TextOut(0, LCD_LINE3, "antwortet nicht.", DRAW_OPT_CLEAR_EOL);
+            TextOut(0, LCD_LINE4, FormatNum("BTStatus: %d", BluetoothStatus(channel)), DRAW_OPT_CLEAR_EOL);
+            TextOut(0, LCD_LINE5, FormatNum("Idle: %d", RemoteConnectionIdle(channel)), DRAW_OPT_CLEAR_EOL);
+            TextOut(0, LCD_LINE6, "Versuche erneut", DRAW_OPT_CLEAR_EOL);
+            TextOut(0, LCD_LINE7, "Verbindung auf-", DRAW_OPT_CLEAR_EOL);
+            TextOut(0, LCD_LINE8, "zubauen...", DRAW_OPT_CLEAR_EOL);
+            BTConnectNXT(channel, connectedNXTNames[channel]);
+        }
+    }
+}
+
+/**
+ * @brief Schaltet Bluetooth ein und baut eine Verbindung mit einem Slave auf.
+ * @param byte channel Der Verbindungskanal.
+ */
+void BTConnectNXT(byte channel, string nxtName) {
+    //Bluetooth ist aus, schalte Bluetooth an.
+    if (BluetoothState() == UI_BT_STATE_OFF) {
+        ClearScreen();
+        TextOut(0, LCD_LINE1, "Bluetooth ist");
+        TextOut(0, LCD_LINE2, "aus.");
+        Wait(500);
+        BTEnableBluetooth();
+        TextOut(0, LCD_LINE3, "----------------");
+        TextOut(0, LCD_LINE4, "Bluetooth wurde ");
+        TextOut(0, LCD_LINE5, "eingeschaltet.  ");
+        Wait(3000);  
+        ClearScreen();
+    } else if (BluetoothStatus(channel)==NO_ERR && BTIsConnected(channel, nxtName) == false) {
+        //Falscher NXT ist verbunden, trenne Verbindung.
+        ClearScreen();
+        TextOut(0, LCD_LINE1, "Falscher NXT ist");
+        TextOut(0, LCD_LINE2, "verbunden. Tren-");
+        TextOut(0, LCD_LINE3, "ne Verbindung:  ");
+        TextOut(0, LCD_LINE4, "Ver: " + BTNXTName(channel));
+        TextOut(0, LCD_LINE5, "Gew: " + nxtName);
+        Wait(500);
+        BTDisconnect(channel);
+        TextOut(0, LCD_LINE6, "----------------");
+        TextOut(0, LCD_LINE7, "Verbindung wurde");
+        TextOut(0, LCD_LINE8, "getrennnt.");
+        Wait(3000);        
+        ClearScreen();
+    }
+    //Richtiger NXT nicht verbunden, baue Verbindung auf.
+    char btError = BluetoothStatus(channel);
+    if (btError != NO_ERR){
+        ClearScreen();
+        TextOut(0, LCD_LINE1, "Kein NXT verbun-");
+        TextOut(0, LCD_LINE2, "den. Starte Ver-");
+        TextOut(0, LCD_LINE3, "bindungsaufbau.");
+        Wait(500);
+        if(BTConnect(channel, nxtName)) {
+            TextOut(0, LCD_LINE4, "----------------");
+            TextOut(0, LCD_LINE5, "Verbindung wurde");
+            TextOut(0, LCD_LINE6, "hergestellt.");
+            Wait(3000);
+        } else {
+            TextOut(0, LCD_LINE4, "<===>FEHLER<===>");
+            TextOut(0, LCD_LINE5, "Verbindung konn-");
+            TextOut(0, LCD_LINE6, "te nicht herge-");
+            TextOut(0, LCD_LINE7, "stellt werden!");
+            Wait(5000);
+            Stop(1);
+        }
+        ClearScreen();
+    }
+}
+
+/**
+ * @brief Gibt den Namen des gerade laufenden Slave Programms zurueck.
+ * @param byte channel Der Verbindungskanal.
+ * @return string Der Programmname.
+ */
+string BTCurrentProgram(byte channel) {
+    BTWait(channel);
+    string programName;
+    
+    char retVal = ERR_COMM_CHAN_NOT_READY;
+    while(retVal == ERR_COMM_CHAN_NOT_READY) {
+        retVal = RemoteGetCurrentProgramName(channel, programName);
+        Wait(50);
+    }
+    
+    BTWait(channel);
+    
+    if (retVal == ERR_NO_PROG) {
+        return "";
+    }
+    
+    return BTNXCProgramName2programName(programName);
+}
+
+/**
+ * @brief Startet ein Programm auf einem Slave.
+ * @param byte channel Der Verbindungskanal.
+ * @param string programName der Programname.
+ */
+void BTStartProgram(byte channel, string programName) {
+    programName = BTProgramName2NXCProgramName(programName);
+    
+    BTWait(channel);
+   
+    char retVal = ERR_COMM_CHAN_NOT_READY;
+    while(retVal == ERR_COMM_CHAN_NOT_READY) {
+        retVal = RemoteStartProgram(channel, programName);
+        Wait(50);
+    }
+    BTWait(channel);
+}
+
+/**
+ * @brief Beendet das gerade laufende Slave Programm.
+ * @param byte channel Der Verbindungskanal.
+ */
+void BTStopProgram(byte channel) {
+    BTWait(channel);
+    
+    char retVal = ERR_COMM_CHAN_NOT_READY;
+    while(retVal == ERR_COMM_CHAN_NOT_READY) {
+        retVal = RemoteStopProgram(channel);
+        Wait(50);
+    }
+    BTWait(channel);
+}
+
+/**
+ * @brief Setzt den Sleep-Timer eines Slaves zurueck.
+ * @param byte channel Der Verbindungskanal.
+ */
+void BTKeepAlive(byte channel) {    
+    BTWait(channel);
+    
+    char retVal = ERR_COMM_CHAN_NOT_READY;
+    while(retVal == ERR_COMM_CHAN_NOT_READY) {
+        retVal = RemoteKeepAlive(channel);
+        Wait(50);
+    }
+    
+    BTWait(channel);
+}
+
+/*
+#define BT_CHANNEL 1
+task main(){
+    BTConnectNXT(BT_CHANNEL);
+    Wait(1000);
+    BTStopProgram(BT_CHANNEL);
+    Wait(1000);
+    BTStartProgram(BT_CHANNEL, "Slave");
+    TextOut(0, LCD_LINE2, "gestartet");
+    Wait(1000);
+    TextOut(0, LCD_LINE1, BTCurrentProgram(BT_CHANNEL));
+    Wait(1000);
+    TextOut(0, LCD_LINE2, "exit versuch");
+    BTStopProgram(BT_CHANNEL);
+    TextOut(0, LCD_LINE2, "beendet");
+    Wait(1000);    
+}
+*/
+
+
+/**
+ * @brief Konvertiert einen normalen Programmnamen zum fuer den NXT lesbaren Namen.
+ * @example "Slave" wird zu "Slave.rxe".
+ */
+string BTProgramName2NXCProgramName(string programName) {
+    return programName + ".rxe";
+}
+
+/**
+ * @brief Konvertiert einenfuer den NXT lesbaren Namen zum normalen Programmnamen.
+ * @example "Slave.rxe" wird zu "Slave".
+ */
+string BTNXCProgramName2programName(string NXCProgramName) {
+    return SubStr(NXCProgramName, 0, strlen(NXCProgramName) - 4);
+}
+
+/**
+ * @brief Aktivert Bluetooth.
+ */
+void BTEnableBluetooth() {
+    CommExecuteFunctionType cefArgs;
+    cefArgs.Cmd = INTF_BTON;
+    
+    UNTIL(SysCommExecuteFunction(cefArgs), cefArgs.RetVal == NO_ERR, 3000, ;, "Bluetooth aktivieren gescheitert!", -1, false);  
+}
+
+void BTDisableBluetooth() {
+    CommExecuteFunctionType cefArgs;
+    cefArgs.Cmd = INTF_BTOFF;
+    
+    UNTIL(SysCommExecuteFunction(cefArgs), cefArgs.RetVal == NO_ERR, 3000, ;, "Bluetooth deaktivieren gescheitert!", -1, false);  
+}
+
+void BTGetContactNames(string &names[]) {
+    byte devices = BTDeviceNameCount();
+    for(byte i = 0; i < devices; i++) {
+        names[i] = BTDeviceName(i);    
+    }
+}
+
+
+string BTNXTName(byte channel) { 
+    string name;
+    
+    BTWait(channel);
+    name = BTConnectionName(channel);
+    BTWait(channel);
+    
+    return name;
+}
+
+bool BTIsConnected(byte channel, string nxtName) {
+    string realNXTName = BTNXTName(channel);
+
+    if(strcmp(realNXTName, nxtName) == 0) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/**
+ * @brief Baut eine Verbindung mit einem Slave auf.
+ * @param byte channel Der Verbindungskanal.
+ * @param string nxtName Der Name des NXTs.
+ */
+bool BTConnect(byte channel, string nxtName)
+{    
+    byte devices = BTDeviceNameCount();
+    char deviceToConnect = -1;
+    string names[4];
+    BTGetContactNames(names);
+    for(byte i = 0; i < devices; i++) {
+        if (strcmp(names[i], nxtName) == 0) {
+            deviceToConnect = i;
+        }
+    }
+    if(deviceToConnect == -1) {
+        return false;
+    }
+    
+    CommExecuteFunctionType args;
+    args.Cmd = INTF_CONNECT;
+    args.Param1 = deviceToConnect;
+    args.Param2 = channel;
+    
+
+    //UNTIL(SysCommExecuteFunction(cefArgs), cefArgs.RetVal == NO_ERR, 5500, BTDisableBluetooth();BTEnableBluetooth();, FormatNum("Verbindung mit " + nxtName + " auf Kanal %d gescheitert!", channel), -1, false);
+
+    while(1) {
+        SysCommExecuteFunction(args); // try to connect.
+        if(args.RetVal == NO_ERR) {
+            break;
+        } else {
+            Wait(1000);
+        }
+    }
+    
+    connectedNXTNames[channel] = nxtName;
+
+    return true;
+}
+
+/**
+ * @brief Trennt eine Verbindung mit einem Slave.
+ * @param byte channel Der Verbindungskanal.
+ */
+void BTDisconnect(byte channel)
+{    
+    CommExecuteFunctionType cefArgs;
+    cefArgs.Cmd = INTF_DISCONNECT;
+    cefArgs.Param1 = channel;
+    SysCommExecuteFunction(cefArgs);
+    
+    //UNTIL(SysCommExecuteFunction(cefArgs), cefArgs.RetVal == NO_ERR, 3000, ;, FormatNum("Trennen der Verbindung auf Kanal %d gescheitert!", channel), 1, false);  
+
+    SysCommExecuteFunction(cefArgs);
+    Wait(100);
+    
+    connectedNXTNames[channel] = "";
+}

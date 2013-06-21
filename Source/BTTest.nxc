@@ -1,0 +1,198 @@
+#include "Bluetooth.h"
+#include "Bluetooth.nxc"
+
+#define DRAW_OPT_CLEAR_EOL   (0x1000)
+
+void page1();
+void page2();
+void page3();
+void page4();
+void page5();
+
+int page = 0;
+bool flag = true;
+
+task pageTask() {       
+    while(1) { 
+        if(ButtonPressed(BTNRIGHT, true)) {
+            while(ButtonPressed(BTNRIGHT, true) || !flag);
+            ClearScreen();
+            page++;
+        } else if(ButtonPressed(BTNLEFT, true)) {
+            while(ButtonPressed(BTNLEFT, true) || !flag);
+            ClearScreen();
+            page--;
+        }
+        NumOut(0, LCD_LINE1, page, DRAW_OPT_CLEAR_EOL);
+    }
+}
+
+task main() {    
+    TextOut(5, LCD_LINE1, "Bluetooth Test", true);
+    LineOut(0, LCD_LINE1 - 1, DISPLAY_WIDTH, LCD_LINE1 - 1);
+    
+    StartTask(pageTask);
+    
+    while(1) {
+        flag = false;
+        switch(page) {
+            case 0:
+                page1();
+                break;
+            case 1:
+                page2();
+                break;
+            case 2:
+                page3();
+                break;
+            case 3:
+                page4();
+                break;
+            case 4:
+                page5();
+                break;
+            default:
+                break;
+        }
+
+        flag = true;
+        Wait(10);
+    }
+}
+
+void page1(void) {
+    // Bluetooth address:
+    byte btaddr[];
+    char result = RemoteGetBluetoothAddress(CONN_BT1, btaddr);
+    string temp;
+    for(int i = 0; i < ArrayLen(btaddr); i++) {
+        temp += NumToStr(btaddr);
+    }
+    TextOut(0, LCD_LINE3, FormatNum("BTAddr:%d", result) + ";" + temp, DRAW_OPT_CLEAR_EOL);
+    
+    // Bluetooth status:
+    TextOut(0, LCD_LINE4, FormatNum("BTStatus:%d", BluetoothStatus(CONN_BT1)), DRAW_OPT_CLEAR_EOL);
+        
+    // Brick data bluetooth hardware status:
+    TextOut(0, LCD_LINE5, FormatNum("BDBTHWStatus:%d", BrickDataBtHardwareStatus()), DRAW_OPT_CLEAR_EOL);
+        
+    // Brick data bluetooth state status:
+    TextOut(0, LCD_LINE6, FormatNum("BDBTStStatus:%d", BrickDataBtStateStatus()), DRAW_OPT_CLEAR_EOL);
+        
+    // Bluetooth timeout value:
+    TextOut(0, LCD_LINE7, FormatNum("Timeout:%d", BrickDataTimeoutValue()), DRAW_OPT_CLEAR_EOL);
+        
+    // Bluetooth data mode:
+    TextOut(0, LCD_LINE8, FormatNum("BTDataMode:%d", BTDataMode()), DRAW_OPT_CLEAR_EOL);
+}
+
+void page2(void) {
+    // BLuetooth connection address:    
+    byte data[];
+    string temp;
+    GetBTConnectionAddress(CONN_BT1, data);
+    for(int i = 0; i < ArrayLen(data); i++) {
+        temp += NumToStr(data);
+    }
+    TextOut(0, LCD_LINE3, "ConnAddr:" + temp, DRAW_OPT_CLEAR_EOL);
+
+    // Bluetooth device address:
+    byte data2[];
+    string temp2;
+    GetBTDeviceAddress(CONN_BT1, data2);
+    for(int i = 0; i < ArrayLen(data2); i++) {
+        temp2 += NumToStr(data2);
+    }
+    TextOut(0, LCD_LINE4, "DeviceAddr:" + temp2, DRAW_OPT_CLEAR_EOL);
+    
+    // Bluetooth device status:
+    TextOut(0, LCD_LINE5, FormatNum("DeviceStat:%d", BTDeviceStatus(CONN_BT1)), DRAW_OPT_CLEAR_EOL);
+    
+    // Bluetooth connection stream status:
+    TextOut(0, LCD_LINE6, FormatNum("ConStreamStat:%d", BTConnectionStreamStatus(CONN_BT1)), DRAW_OPT_CLEAR_EOL);
+    
+    // Bluetooth connection name:
+    // ERROR: Always 0!
+    TextOut(0, LCD_LINE7, FormatNum("ConName:%d", BTConnectionName(CONN_BT1)), DRAW_OPT_CLEAR_EOL);
+    
+}
+
+void page3(void) {
+    TextOutML(0, LCD_LINE3, "OK zum Trennen der Verbindung mit Kanal CONN_BT1");
+    if(ButtonPressed(BTNCENTER, true)) {
+        while(ButtonPressed(BTNCENTER, true));
+        PlayTone(500, 500);
+        
+        CommBTConnectionType args;
+        args.Name = "Slave0"; // whatever the slave NXT's name is
+        args.ConnectionSlot = CONN_BT1; // this is the desired connection slot (the above code uses 1)
+        args.Action = TRUE; // could use some #define with a non-zero value to connect.  0 == disconnect
+
+        SysCommBTConnection(args);
+        
+        /*
+         * #define 	LDR_BTBUSY          0x9400
+         * #define 	LDR_BTCONNECTFAIL   0x9500
+         * #define 	LDR_BTTIMEOUT       0x9600
+         */
+        TextOut(0, LCD_LINE7, FormatNum("Result:%d", args.Result), DRAW_OPT_CLEAR_EOL);
+        switch(args.Result) {
+            case LDR_BTBUSY:
+                TextOut(0, LCD_LINE8, "LDR_BTBUSY", DRAW_OPT_CLEAR_EOL);
+                break;
+            case LDR_BTCONNECTFAIL:
+                TextOut(0, LCD_LINE8, "LDR_BTCONNECTFAIL", DRAW_OPT_CLEAR_EOL);
+                break;
+            case LDR_BTTIMEOUT:
+                TextOut(0, LCD_LINE8, "LDR_BTTIMEOUT", DRAW_OPT_CLEAR_EOL);
+                break;
+            default:
+                TextOut(0, LCD_LINE8, "ERRORCODE unbk.", DRAW_OPT_CLEAR_EOL);
+        }
+    }
+}
+
+void page4(void) {
+    TextOutML(0, LCD_LINE3, "OK zum pruefen des Status mit CONN_BT1");
+    if(ButtonPressed(BTNCENTER, true)) {
+        while(ButtonPressed(BTNCENTER, true));
+        PlayTone(500, 500);
+        
+        CommBTCheckStatusType args;
+        args.Connection = CONN_BT1;
+        SysCommBTCheckStatus(args);
+        TextOut(0, LCD_LINE7, FormatNum("Result:%d", args.Result), DRAW_OPT_CLEAR_EOL);
+        
+    }
+}
+
+void page5(void) {
+    TextOutML(0, LCD_LINE3, "OK zum Trennen der Verbindung mit Kanal CONN_BT1");
+    if(ButtonPressed(BTNCENTER, true)) {
+        while(ButtonPressed(BTNCENTER, true));
+        PlayTone(500, 500);
+        
+        
+    }
+}
+
+string err2Str(long err) {
+    switch(err) {
+        case LDR_BTBUSY:
+            return "LDR_BTBUSY";
+        case LDR_BTCONNECTFAIL:
+            return "LDR_BTCONNECTFAIL";
+        case LDR_BTTIMEOUT:
+            return "LDR_BTTIMEOUT";
+        case ERR_COMM_CHAN_NOT_READY:
+            return "ERR_COMM_CHAN_NOT_READY";
+        case ERR_COMM_CHAN_INVALID:
+            return "ERR_COMM_CHAN_INVALID";
+        case ERR_COMM_BUFFER_FULL:
+            return "ERR_COMM_BUFFER_FULL";
+        case ERR_COMM_BUS_ERR:
+            return "ERR_COMM_BUS_ERR";
+        default:
+            return "ERRORCODE unbk.";
+    }
+}
