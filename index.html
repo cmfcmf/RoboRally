@@ -13,39 +13,140 @@
     <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
     <![endif]-->
 
-    <title>RoboRalley by cmfcmf</title>
+    <title>RoboRally by cmfcmf</title>
+    
+    <style type="text/css">
+      blockquote {
+        font-size: inherit;
+      }
+      .right {
+        float: right;
+      }
+      .clear {
+        clear: both;
+      }
+      strong {
+        font-weight: bold;
+      }
+    </style>
+    
+    <link rel="stylesheet" href="http://yandex.st/highlightjs/7.3/styles/default.min.css">
+    <script src="http://yandex.st/highlightjs/7.3/highlight.min.js"></script>
+    
+    
   </head>
 
   <body>
     <header>
       <div class="inner">
-        <h1>RoboRalley</h1>
-        <h2>The board game RoboRally played by Lego NXTs</h2>
-        <a href="https://github.com/cmfcmf/RoboRalley" class="button"><small>View project on</small>GitHub</a>
+        <h1>RoboRally</h1>
+        <h2>The board game RoboRally played by Lego® NXTs</h2>
+        <a href="https://github.com/cmfcmf/RoboRally" class="button"><small>View project on</small>GitHub</a>
       </div>
     </header>
 
     <div id="content-wrapper">
       <div class="inner clearfix">
         <section id="main-content">
-          <p>Work in progress…</p>
+          <h3>What is RoboRally?</h3>
+          <blockquote>In RoboRally, players assume control of one of many "Robot Control Computers" in a dangerous widget factory filled with moving, course-altering conveyor belts, metal-melting laser beams, bottomless pits, crushers, and a variety of other obstacles. The goal in a game of RoboRally is, apart from survival, to be the first to reach a pre-designated number of checkpoints in a particular order. However, the real difficulty in RoboRally is movement, which is accomplished with the randomly dealt program cards.<br /><small>Source: <cite><a href="http://en.wikipedia.org/w/index.php?title=RoboRally&oldid=549103996" title="http://en.wikipedia.org/w/index.php?title=RoboRally&oldid=549103996" alt="http://en.wikipedia.org/w/index.php?title=RoboRally&oldid=549103996">http://en.wikipedia.org/w/index.php?title=RoboRally&oldid=549103996</a></cite>, <a href="http://en.wikipedia.org/w/index.php?title=RoboRally#Gameplay">read more</a>.</small></blockquote>
+          <p>Below you see a picture of how the board game looks like:
+          <a title="By Moroboshi (Own work) [CC-BY-SA-3.0 (http://creativecommons.org/licenses/by-sa/3.0)], via Wikimedia Commons" href="http://commons.wikimedia.org/wiki/File%3ARoborally_boardgame.JPG"><img width="512" alt="Roborally boardgame" src="http://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Roborally_boardgame.JPG/1024px-Roborally_boardgame.JPG"/></a>
+          <br />© by Moroboshi (Own work) [<a href="http://creativecommons.org/licenses/by-sa/3.0">CC-BY-SA-3.0</a>], <a href="http://commons.wikimedia.org/wiki/File%3ARoborally_boardgame.JPG">via Wikimedia Commons</a></p>
+          <p>Now we had the idea to build and play the game in real with real robots. As we had several LEGO® NXTs, we decided to programm and construct 4 NXTs playing RoboRally. That was at the beginning of 2013.</p>
+          <h4>The basics</h4>
+          <img src="images/java_program.png" width="400" class="right" />
+          <p>We used four Lego® MINDSTORMS NXT 2.0 and several additional LEGO® bricks. One NXT is our master, which takes full control on the three slaves, connected via Bluetooth. The NXTs are programmed in <a href="">Not eXactly C</a>. The movement cards are virtually displayed on a laptop connected to the master via USB. Although there is a computer available, we decided to do all the calculations on the NXT and use the computer only as a input device to make it more difficult. The laptop runs a java programm which you can see on the right.</p>
+          <h4>The files</h4>
+          <p>If you take a look into <a href="https://www.github.com/cmfcmf/RoboRally">the github repo</a> you will see that there are two main folders:
+          <ul>
+          <li><code>Java</code><p>Java contains the NetBeans project for the Java program. If you just want to use it, got to <code>Java/dist</code> and run <code>Roboralley.jar</code>. <strong>IMPORTANT:</strong> This will only work on Windows, because it depends on <a href="">NextTool.exe</a> to communicate with the NXT. By default this file has to be located at <code>C:\\\"Program Files (x86)\"\\BricxCC\\NextTool.exe</code>, but you can change the location in the program's settings.</p></li>
+          <li><code>Source</code><p>Here we go! This directory contains the source files for the NXTs. For the master, compile and download the <code>Master.nxc</code> file. For the slaves, compile and download the <code>Slave.nxc</code> file. <strong>IMPORTANT:</strong> All NXTs neeed to have the <a href="http://bricxcc.sourceforge.net/firmware.html">Enhanced NBC/NXC Firmware</a> installed.</p>
+          </ul>
+          </p>
+          <h4>How do I get this project working?</h4>
+          <p>Here are step-by-step instructions on how to get your own RoboRally playing robots:</p>
+          <ol>
+            <li>Make sure to have at least two NXTs and one Windows computer.</li>
+            <li>Download the source code from github.</li>
+            <li>Download and install the <a href="http://bricxcc.sourceforge.net/">Bricx Command Center 3.3</a></li>
+            <li>Download the <a href="http://bricxcc.sourceforge.net/firmware.html">Enhanced NBC/NXC Firmware</a> onto every NXT using the Bricx Command Center.</li>
+            <li>Open <code>Global.h</code> with Bricx Command Center. Change the options to match your circumstances. It should look like this:
+            <pre>
+            <code class="c">/**
+ * @file Global.h
+ */
+ 
+/**
+ * @name Unveraenderliche Konstanten
+ * @warning Werte NICHT veraendern!
+ * @{
+ */ 
+#define NACH_RUNDE 1 // Do not change
+#define NACH_ZUG 2 // Do not change
+/**@}*/
 
-<h3>
-<a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>License</h3>
+#define ANZAHL_ZUEGE 5  // Do not change
+#define ANZAHL_ROBOTER 3 // Number of slaves
 
-<p>GNU/GPLv3 (or at your option, any later version).</p></section>
+#define LCD_ZEICHEN_PRO_ZEILE 16 // Do not change
+
+// Shall a checkpoint be saved every move ("NACH_ZUG") 
+// or every round ("NACH_RUNDE")?
+#define CHECKPOINT_UPDATE NACH_RUNDE 
+
+/**
+ * @brief Soll das Spielfeld auf dem Display ausgegeben werden?
+ */
+#define SPIELFELD_AUSGEBEN 0 //Shall the field be displayed on the screen?</code>
+            </pre>
+            </li>
+            <li>Take a look into <code>Spielfeld.h</code>. Check these lines:
+            <pre>
+            <code class="c">/// The x-length of the biggest field you use.
+#define SPIELFELD_MAX_X 10
+/// The y-length of the biggest field you use.
+#define SPIELFELD_MAX_Y 10
+
+/// The name of the field to download
+#define SPIELFELD "feld_lndw.txt"
+#download "feld_lndw.txt"</code>
+            </pre>
+            </li>
+            <li>Compile and download <code>Slave.nxc</code> onto every slave.</li>
+            <li>Compile and download <code>Master.nxc</code> onto the master.</li>
+            <li>Connect every slave to the master via Bluetooth. Start at connection one.</li>
+            <li>Start the <code>Slave</code> program on every slave</li>
+            <li>Start the <code>Master</code> program on the master</li>
+          </ol>
+          <h3><a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>Roadmap</h3>
+          <p>Here is a short list of features not being implemented:
+          <ul>
+            <li>Roboter laser</li>
+            <li>Roboter damage</li>
+            <li>Field laser</li>
+            <li>More than three roboters</li>
+            <li>Conveyor belts</li>
+            <li>Rotation fields</li>
+            <li>Crushers</li>
+          </ul></p>
+          <h3><a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>Why did you do that?</h3>
+          <p>Every week, I go to <a href="">Roberta</a> at TU Berlin. We searched for a nice project to work on and came up with RoboRally. It took approximately four months form the first ideas to the current version.</p>
+          <h3><a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>License</h3>
+          <p>Feel free to use the source code according to GNU/GPLv3 (or at your option, any later version).</p>
+        </section>
 
         <aside id="sidebar">
-          <a href="https://github.com/cmfcmf/RoboRalley/zipball/master" class="button">
+          <a href="https://github.com/cmfcmf/RoboRally/zipball/master" class="button">
             <small>Download</small>
             .zip file
           </a>
-          <a href="https://github.com/cmfcmf/RoboRalley/tarball/master" class="button">
+          <a href="https://github.com/cmfcmf/RoboRally/tarball/master" class="button">
             <small>Download</small>
             .tar.gz file
           </a>
 
-          <p class="repo-owner"><a href="https://github.com/cmfcmf/RoboRalley"></a> is maintained by <a href="https://github.com/cmfcmf">cmfcmf</a>.</p>
+          <p class="repo-owner"><a href="https://github.com/cmfcmf/RoboRally"></a> is maintained by <a href="https://github.com/cmfcmf">cmfcmf</a>.</p>
 
           <p>This page was generated by <a href="pages.github.com">GitHub Pages</a> using the Architect theme by <a href="https://twitter.com/jasonlong">Jason Long</a>.</p>
         </aside>
